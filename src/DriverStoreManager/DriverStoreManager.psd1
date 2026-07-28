@@ -1,6 +1,6 @@
 @{
     RootModule        = 'DriverStoreManager.psm1'
-    ModuleVersion     = '0.7.9'
+    ModuleVersion     = '0.7.10'
     GUID              = 'a3f8c2d1-7b4e-4f91-9c0d-8e5a6b7c8d9e'
     Author            = 'Ville Pispa'
     Description       = 'Inventory, vulnerability scan, and safe cleanup of Windows Driver Store packages.'

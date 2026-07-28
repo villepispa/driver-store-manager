@@ -7,6 +7,15 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [0.7.10] — 2026-07-28
+
+### Changed
+
+- **README / Intune docs** — Fixed broken Quick start / Testing fences; added
+  **Intune — build and test locally** (build, PS 5.1 smoke, live detection dry-run,
+  remediate caution). Mirrored short local path in `docs/intune-deployment.md`.
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.7.10` for this release.
+
 ## [0.7.9] — 2026-07-28
 
 ### Added

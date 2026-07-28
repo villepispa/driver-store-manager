@@ -26,6 +26,25 @@ Source merge order: `scripts/intune/bundle-order.json`. Entry logic:
 
 After changing module source, rebuild and re-upload to Intune.
 
+## Local build and test
+
+Quick path (also summarized in the [README](../README.md#intune--build-and-test-locally)):
+
+```powershell
+.\scripts\Build-DsmIntuneScripts.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-DsmPs51SmokeTest.ps1
+```
+
+Optional live detection (writes ProgramData reports; does not delete drivers):
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\dist\intune\Detect-DsmDriverStoreCompliance.ps1
+$LASTEXITCODE   # 0 compliant | 1 non-compliant | 2 error
+```
+
+Do **not** casually run `Remediate-DsmDriverStore.ps1` on a daily driver — it deletes
+orphans. Preview with `Remove-DsmUnusedDriverPackages -WhatIf` first.
+
 ## Intune portal settings
 
 | Setting | Value |

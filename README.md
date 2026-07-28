@@ -1,7 +1,8 @@
 # Driver Store Manager
 
 PowerShell module to **inventory**, **assess**, and **safely remove** third-party driver
-packages in the Windows Driver Store using built-in tools.
+packages in the Windows Driver Store using built-in tools. Includes **Microsoft Intune**
+Proactive Remediation detect/remediate bundles (Windows PowerShell 5.1 / SYSTEM).
 
 ## Quick start
 
@@ -32,18 +33,9 @@ Update-DsmMicrosoftDriverBlocklist -Force
 
 # Scan only (Microsoft cache + optional supplemental)
 Test-DsmDriverVulnerabilities -Inventory (Get-DsmDriverStoreInventory)
-
-## Testing
-
-```powershell
-# Unit + integration (PowerShell 7+; Pester 6 recommended)
-.\tests\Invoke-DsmPester.ps1
-# Or directly (Pester 6 configuration object):
-# $c = New-PesterConfiguration; $c.Run.Path = '.\tests'; Invoke-Pester -Configuration $c
-
-# Windows PowerShell 5.1 smoke (no live pnputil)
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-DsmPs51SmokeTest.ps1
 ```
+
+Cleanup preview (module API — safer than running the Intune remediate bundle):
 
 ```powershell
 Remove-DsmUnusedDriverPackages -PreserveRulesPath .\data\preserve-rules.example.json -WhatIf -PassThru
@@ -56,6 +48,79 @@ Remove-DsmUnusedDriverPackages -PreserveRulesPath .\data\preserve-rules.example.
 # Or combined with audit:
 .\scripts\Invoke-DsmDriverStoreAudit.ps1 -OutputPath .\audit-output -IncludeCleanupPreview -ExportDiskIdCatalog
 ```
+
+## Testing
+
+```powershell
+# Unit + integration (PowerShell 7+; Pester 6 recommended)
+.\tests\Invoke-DsmPester.ps1
+# Or directly (Pester 6 configuration object):
+# $c = New-PesterConfiguration; $c.Run.Path = '.\tests'; Invoke-Pester -Configuration $c
+
+# Windows PowerShell 5.1 smoke (no live pnputil) — build Intune bundles first
+.\scripts\Build-DsmIntuneScripts.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-DsmPs51SmokeTest.ps1
+```
+
+## Intune — build and test locally
+
+Intune Proactive Remediation runs **Windows PowerShell 5.1** (64-bit, **SYSTEM**).
+Edit module source under `src/`; generate upload scripts — do **not** hand-edit
+`dist/intune/`. Full portal settings, exit codes, and pilot checklist:
+[docs/intune-deployment.md](docs/intune-deployment.md).
+
+### 1. Build standalone scripts
+
+```powershell
+# From repo root (PS 7+ or Windows PowerShell 5.1)
+.\scripts\Build-DsmIntuneScripts.ps1
+# Optional agent one-liner: .\scripts\Build-DsmIntuneScripts.ps1 -AgentSummary
+# → dist/intune/Detect-DsmDriverStoreCompliance.ps1
+# → dist/intune/Remediate-DsmDriverStore.ps1
+```
+
+Rebuild after any `src/` or `scripts/intune/templates/` change before upload.
+
+### 2. Automated local gate (recommended before upload)
+
+```powershell
+.\scripts\Build-DsmIntuneScripts.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-DsmPs51SmokeTest.ps1
+```
+
+The smoke test requires pre-built `dist/intune` bundles. It exercises PS 5.1
+StrictMode paths, mocked `pnputil` fixtures, and Intune detection/remediation
+gate logic **without** touching the live driver store.
+
+### 3. Live detection dry-run (optional)
+
+Mirrors Intune detection on this machine (writes under
+`%ProgramData%\DriverStoreManager\reports\intune-detection\`). Prefer an elevated
+**64-bit** Windows PowerShell 5.1 host:
+
+```powershell
+# Prefer SysWOW64? No — use 64-bit PowerShell (System32), same as Intune.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\dist\intune\Detect-DsmDriverStoreCompliance.ps1
+$LASTEXITCODE
+# 0 = compliant | 1 = non-compliant (orphan cleanup would remediate) | 2 = error
+```
+
+Review the newest `detection-summary_*.json` under ProgramData before deciding
+whether remediation is appropriate.
+
+### 4. Remediation — do not casually run the bundle
+
+`Remediate-DsmDriverStore.ps1` **deletes** NeverAssociated orphan candidates
+(export-before-delete, max 10 per run) and requires administrator / SYSTEM.
+For local preview, use the module instead:
+
+```powershell
+Import-Module .\src\DriverStoreManager\DriverStoreManager.psd1 -Force
+Remove-DsmUnusedDriverPackages -PreserveRulesPath .\data\preserve-rules.example.json -WhatIf -PassThru
+```
+
+Only run the remediate bundle on an isolated VM / pilot device after reviewing
+detection JSON and backups policy. See [safety-gates.md](docs/safety-gates.md).
 
 ## Requirements
 
@@ -76,14 +141,6 @@ Remove-DsmUnusedDriverPackages -PreserveRulesPath .\data\preserve-rules.example.
 | `Update-DsmMicrosoftDriverBlocklist` | 4 | Download/cache Microsoft vulnerable driver hashes |
 | `Test-DsmDriverVulnerabilities` | 4 | Blocklist (auto + supplemental), Authenticode, orphan |
 | `Remove-DsmUnusedDriverPackages` | 5 | Filter + preserve aware cleanup; export backup; `-PassThru` summary |
-
-Build **Intune Proactive Remediation** scripts (PS 5.1, SYSTEM):
-
-```powershell
-.\scripts\Build-DsmIntuneScripts.ps1
-# → dist/intune/Detect-DsmDriverStoreCompliance.ps1
-# → dist/intune/Remediate-DsmDriverStore.ps1
-```
 
 ## Documentation
 

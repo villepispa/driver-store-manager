@@ -1,0 +1,26 @@
+# Local / generated working trees
+audit-output/
+backups/
+*.log
+
+# Ad-hoc pnputil CSV dumps at repo root
+pnputil_*.csv
+
+# Secrets / credentials
+.env
+.env.*
+
+# OS / editor
+Thumbs.db
+.DS_Store
+*.code-workspace
+
+# Historical session exports (absorbed into living docs; keep local only)
+docs/archive/
+
+# Ad-hoc drafts (may contain host paths)
+scripts/_drafts/
+tests/_drafts/
+
+# Cursor agent / PM workspace state (not part of the product publish surface)
+.cursor/

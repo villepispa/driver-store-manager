@@ -1,0 +1,5 @@
+# Generated audit reports
+audit-output/
+
+# Raw chat exports
+docs/v0_1_Cursor_transcipt_DriverStoreManager.md

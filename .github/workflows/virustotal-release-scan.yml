@@ -1,0 +1,183 @@
+# VirusTotal URL scan for GitHub release assets (own product repos).
+# Secret (once per repo): VIRUSTOTAL_API_KEY — VirusTotal API key (never commit).
+# GUI: https://www.virustotal.com/gui/home/url
+#
+# Scans browser_download_url assets plus auto source zipball/tarball URLs.
+# Fails the job when any URL report has malicious > 0.
+
+name: virustotal-release-scan
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to scan (e.g. v1.2.3)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vt-release-${{ github.repository }}-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: true
+
+jobs:
+  scan-release-urls:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: List release asset URLs
+        id: urls
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          JSON=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}")
+          echo "$JSON" > release.json
+          python3 <<'PY'
+          import json, os
+          with open("release.json", encoding="utf-8") as f:
+              rel = json.load(f)
+          urls = []
+          for a in rel.get("assets") or []:
+              u = a.get("browser_download_url")
+              if u:
+                  urls.append(u)
+          for key in ("zipball_url", "tarball_url"):
+              u = rel.get(key)
+              if u:
+                  urls.append(u)
+          # unique preserve order
+          seen = set()
+          ordered = []
+          for u in urls:
+              if u not in seen:
+                  seen.add(u)
+                  ordered.append(u)
+          with open("urls.txt", "w", encoding="utf-8") as out:
+              out.write("\n".join(ordered) + ("\n" if ordered else ""))
+          print(f"url_count={len(ordered)}")
+          PY
+          COUNT=$(wc -l < urls.txt | tr -d ' ')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No download URLs found for tag $TAG"
+            exit 1
+          fi
+
+      - name: Submit URLs to VirusTotal
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VIRUSTOTAL_API_KEY:-}" ]; then
+            echo "::error::Repository secret VIRUSTOTAL_API_KEY is not set"
+            exit 1
+          fi
+          python3 <<'PY'
+          import json, os, time, urllib.parse, urllib.request, base64, sys
+
+          api_key = os.environ["VIRUSTOTAL_API_KEY"]
+          headers = {
+              "x-apikey": api_key,
+              "accept": "application/json",
+              "content-type": "application/x-www-form-urlencoded",
+          }
+
+          def http(method, url, data=None):
+              req = urllib.request.Request(url, data=data, headers=headers, method=method)
+              with urllib.request.urlopen(req, timeout=120) as resp:
+                  return json.load(resp)
+
+          def gui_url(u: str) -> str:
+              b = base64.urlsafe_b64encode(u.encode("utf-8")).decode("ascii").rstrip("=")
+              return f"https://www.virustotal.com/gui/url/{b}"
+
+          with open("urls.txt", encoding="utf-8") as f:
+              urls = [line.strip() for line in f if line.strip()]
+
+          results = []
+          malicious = 0
+          suspicious = 0
+          for i, url in enumerate(urls):
+              # Free API ~4 req/min — pause between submissions
+              if i:
+                  time.sleep(16)
+              submit = http(
+                  "POST",
+                  "https://www.virustotal.com/api/v3/urls",
+                  data=urllib.parse.urlencode({"url": url}).encode(),
+              )
+              analysis_id = submit["data"]["id"]
+              status = "queued"
+              stats = {}
+              for attempt in range(20):
+                  if attempt:
+                      time.sleep(15)
+                  analysis = http(
+                      "GET",
+                      f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
+                  )
+                  status = analysis["data"]["attributes"]["status"]
+                  if status == "completed":
+                      stats = analysis["data"]["attributes"]["stats"]
+                      break
+              if status != "completed":
+                  print(f"::error::Analysis incomplete for {url} status={status}")
+                  sys.exit(1)
+              mal = int(stats.get("malicious") or 0)
+              sus = int(stats.get("suspicious") or 0)
+              if mal:
+                  malicious += 1
+              if sus:
+                  suspicious += 1
+              row = {
+                  "url": url,
+                  "status": status,
+                  "malicious": mal,
+                  "suspicious": sus,
+                  "undetected": int(stats.get("undetected") or 0),
+                  "harmless": int(stats.get("harmless") or 0),
+                  "guiUrl": gui_url(url),
+              }
+              results.append(row)
+              print(json.dumps(row))
+
+          summary = {
+              "tag": os.environ.get("TAG", ""),
+              "urlCount": len(urls),
+              "maliciousCount": malicious,
+              "suspiciousCount": suspicious,
+              "results": results,
+          }
+          with open("vt-summary.json", "w", encoding="utf-8") as out:
+              json.dump(summary, out, indent=2)
+          if malicious:
+              print(f"::error::VirusTotal malicious detections: {malicious}")
+              sys.exit(1)
+          print(f"VT-RELEASE-OK urls={len(urls)} suspicious={suspicious}")
+          PY
+
+      - name: Upload summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vt-release-summary-${{ steps.tag.outputs.tag }}
+          path: |
+            vt-summary.json
+            urls.txt
+            release.json
+          if-no-files-found: ignore

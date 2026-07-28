@@ -1,0 +1,25 @@
+[
+  {
+    "Name": "DisplayLink latest per family",
+    "RuleType": "KeepLatest",
+    "FamilyGroupBy": "ProviderOriginalName",
+    "Filter": {
+      "Provider": ["*DisplayLink*", "Synaptics*"]
+    }
+  },
+  {
+    "Name": "Printer queue drivers",
+    "RuleType": "KeepMatching",
+    "Filter": {
+      "DriverClass": ["Printer", "PrintQueue"]
+    }
+  },
+  {
+    "Name": "Unplugged USB device drivers",
+    "RuleType": "KeepMatching",
+    "Filter": {
+      "HardwareId": ["USB\\VID_*"],
+      "Association": "DisconnectedInstalled"
+    }
+  }
+]

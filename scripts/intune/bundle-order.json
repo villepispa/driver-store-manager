@@ -1,0 +1,24 @@
+{
+  "description": "Source merge order for standalone Intune scripts (Build-DsmIntuneScripts.ps1)",
+  "moduleRootRelative": "src/DriverStoreManager",
+  "sources": [
+    "Private/Dsm.Runtime.ps1",
+    "Private/Dsm.Common.ps1",
+    "Private/Dsm.Blocklist.ps1",
+    "Private/Dsm.Filter.ps1",
+    "Private/Dsm.DeviceCorrelation.ps1",
+    "Private/Dsm.Preserve.ps1",
+    "Private/Dsm.InfMetadata.ps1",
+    "Private/Dsm.Report.ps1",
+    "Private/Dsm.Cleanup.ps1",
+    "Public/Get-DsmDriverStoreInventory.ps1",
+    "Public/New-DsmDriverFilter.ps1",
+    "Public/Invoke-DsmDriverFilter.ps1",
+    "Public/New-DsmPreserveRule.ps1",
+    "Public/Invoke-DsmPreservePolicy.ps1",
+    "Public/Get-DsmDriverStoreReport.ps1",
+    "Public/Update-DsmMicrosoftDriverBlocklist.ps1",
+    "Public/Test-DsmDriverVulnerabilities.ps1",
+    "Public/Remove-DsmUnusedDriverPackages.ps1"
+  ]
+}

@@ -1,0 +1,4 @@
+DriverName,OriginalName,ProviderName,ClassName,DriverVersion,DeviceDescription,File
+oem1.inf,contoso.inf,Contoso,Display,10.0.1.0,Test GPU,gpu.sys
+oem1.inf,,,,,,gpu.dll
+oem2.inf,bar.inf,Fabrikam,Net,10.0.2.0,,nic.sys

@@ -1,0 +1,69 @@
+# Dual-host PowerShell CI — Pester on pwsh + Windows PowerShell 5.1.
+# Origin: portable template in the Cursor config workspace templates/ps-dual-host-ci/
+# (no private backlog IDs).
+
+name: dual-host-ps
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pester:
+    name: Pester (${{ matrix.shell }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [pwsh, powershell]
+    defaults:
+      run:
+        shell: ${{ matrix.shell }} {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure Pester 6+
+        run: |
+          $pester = Get-Module -ListAvailable -Name Pester |
+            Sort-Object Version -Descending |
+            Select-Object -First 1
+          if (-not $pester -or $pester.Version -lt [version]'6.0.0') {
+            Install-Module -Name Pester -MinimumVersion 6.0.0 -Force `
+              -SkipPublisherCheck -Scope CurrentUser
+          }
+
+      - name: Run Pester
+        run: |
+          & ./tests/Invoke-DsmPester.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  ps51-smoke:
+    name: PS 5.1 smoke
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assert Windows PowerShell 5.1 host
+        shell: powershell
+        run: |
+          $v = $PSVersionTable.PSVersion
+          if ($v.Major -ne 5) {
+            throw "Expected Windows PowerShell 5.x, got $v"
+          }
+          Write-Output "PS51-HOST-OK $v"
+
+      - name: Build Intune bundles then PS 5.1 smoke
+        shell: powershell
+        run: |
+          & ./scripts/Build-DsmIntuneScripts.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & powershell.exe -NoProfile -File ./scripts/Invoke-DsmPs51SmokeTest.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

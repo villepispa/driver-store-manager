@@ -182,7 +182,7 @@ function ConvertFrom-PnPUtilDriverCsv {
     end {
         if ($lines.Count -lt 2) { return (Write-DsmObjectArray) }
 
-        $rows = ConvertFrom-DsmCsvText -Lines @($lines)
+        $rows = @(ConvertFrom-DsmCsvText -Lines @($lines))
         if ($rows.Count -eq 0) { return (Write-DsmObjectArray) }
 
         $packages = [ordered]@{}

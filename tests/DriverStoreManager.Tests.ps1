@@ -30,6 +30,22 @@ Describe 'ConvertFrom-PnPUtilDriverCsv' {
         ($result | Where-Object { $_.PublishedName -eq 'oem1.inf' }).InUse | Should-Be $true
         ($result | Where-Object { $_.PublishedName -eq 'oem2.inf' }).InUse | Should-Be $false
     }
+
+    It 'Parses a single data row under StrictMode (DSM-038)' {
+        Set-StrictMode -Version Latest
+        try {
+            $csv = @(
+                'DriverName,OriginalName,ProviderName,ClassName,DriverVersion,DeviceDescription,File'
+                'oem9.inf,orphan.inf,OrphanCo,System,1.0.0.0,,orphan.sys'
+            )
+            $result = @(ConvertFrom-PnPUtilDriverCsv -InputObject $csv)
+            $result.Count | Should-Be 1
+            $result[0].PublishedName | Should-Be 'oem9.inf'
+        }
+        finally {
+            Set-StrictMode -Off
+        }
+    }
 }
 
 Describe 'Test-DsmElevation' {

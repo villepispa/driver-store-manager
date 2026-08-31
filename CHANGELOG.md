@@ -12,6 +12,15 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 - **DSM-036:** Filed Open — align PSA gate with siblings (fail on Warning).
   Forty-six Warnings remain after DSM-034 Error-only lint. See `docs/issues.md`.
 
+### Fixed
+
+- **DSM-038:** `ConvertFrom-PnPUtilDriverCsv` wraps `ConvertFrom-DsmCsvText`
+  in `@()` so a single CSV data row stays an array. PS 5.1 `Set-StrictMode`
+  has no `.Count` on a scalar PSCustomObject (`PropertyNotFoundException` at
+  line 186). Dual-host CI `Pester (powershell)` failed; `Pester (pwsh)` did
+  not. Tests: `ConvertFrom-PnPUtilDriverCsv` single-row StrictMode case;
+  existing mocked never-associated preview.
+
 ## [0.8.0] — 2026-08-31
 
 ### Added

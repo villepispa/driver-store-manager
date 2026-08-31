@@ -27,6 +27,22 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 - **Impact:** Validate is softer than WinGet.Audit / spine-automation until Warnings are triaged
 - **Proposed:** Fix or exclude cheap findings; then fail lint on Warning as well as Error
 
+## Resolved issues (Unreleased — DSM-038)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-038 | Single-row pnputil CSV unwraps; PS 5.1 StrictMode `.Count` throws | Dual-host `Pester (powershell)` failed; local 5.1 `DSM-PESTER-OK passed=82` (1 inconclusive); pwsh **83/83**; wrap `@()` in `ConvertFrom-PnPUtilDriverCsv` |
+
+### DSM-038 — Single-row driver CSV Count under StrictMode
+
+- **Status:** Resolved
+- **Severity:** Medium
+- **Area:** Inventory / PS 5.1
+- **Evidence:** GitHub Actions `Pester (powershell)` — `Produces cleanup preview for never-associated fixture package`; `Dsm.Common.ps1:186`. Local: 5.1 `DSM-PESTER-OK passed=82`; pwsh **83/83**.
+- **Impact:** One `oem#.inf` data row made `ConvertFrom-DsmCsvText` unwrap to a scalar; `.Count` is missing on PSCustomObject under PS 5.1 StrictMode. Inventory (and Intune detect) can throw instead of returning one package.
+- **Remediation:** `$rows = @(ConvertFrom-DsmCsvText -Lines @($lines))`. Unit test under `Set-StrictMode -Version Latest`.
+- **Resolution:** Source + unit test 2026-08-31; rebuild `dist/intune` after Pester.
+
 ## Resolved issues (2026-08-31 — 0.8.0 — DSM-034 / DSM-035 / DSM-037)
 
 | ID | Summary | Evidence |
@@ -178,6 +194,7 @@ rebuilt `dist/intune/*.ps1`.
 ## Activity
 
 <!-- ISSUES-ACTIVITY+ -->
+- **2026-08-31 17:00:00** — Resolved `DSM-038`: wrap single-row CSV parse in `@()` so PS 5.1 StrictMode `.Count` does not throw (`Pester (powershell)` CI).
 - **2026-08-31 13:12:00** — Resolved `DSM-037`: parameterized Intune build (path vs inline config); `data/` → `examples/`; **82/82** Pester; `DSM-BUILD-OK`.
 - **2026-08-31 12:50:00** — Filed `DSM-037`: parameterized Intune build (path vs inline config) and `data/` → `examples/` rename.
 - **2026-07-28 07:40:40** — Resolved `DSM-033`: StrictMode-safe `Preserved` reads for orphan/deletable helpers; detect no longer throws `PropertyNotFoundStrict` on vuln scan path. Follow-up: sealed build/Pester, rebuilt bundles, **77/77** Pester (`DriverDate`/HashSet/`PassThru` hardening).

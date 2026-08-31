@@ -9,6 +9,13 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Added
 
+- **DSM-036:** Filed Open — align PSA gate with siblings (fail on Warning).
+  Forty-six Warnings remain after DSM-034 Error-only lint. See `docs/issues.md`.
+
+## [0.8.0] — 2026-08-31
+
+### Added
+
 - **DSM-037:** `Build-DsmIntuneScripts.ps1` bakes detect/remediate knobs
   (`-OrphanThreshold`, `-RemediationMaxDeletes`, Microsoft blocklist flags,
   and others). Intune Detection and Remediation cannot take runtime parameters.
@@ -18,8 +25,6 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   inline content is also baked into Remediation. Tests:
   `tests/Build-DsmIntuneScripts.Tests.ps1`. **82/82** Pester; `DSM-BUILD-OK`
   detectBytes=176798 config=none.
-- **DSM-036:** Filed Open — align PSA gate with siblings (fail on Warning).
-  Forty-six Warnings remain after DSM-034 Error-only lint. See `docs/issues.md`.
 - **DSM-034:** Repo-root validate trio — `PSScriptAnalyzerSettings.psd1`,
   `scripts/Invoke-DsmScriptAnalyzer.ps1`, `scripts/Invoke-DsmValidate.ps1`
   (build → PS 5.1 smoke → Pester → lint). README **Validate**. Lint gate
@@ -36,6 +41,8 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 - **`data/` → `examples/`** — sample preserve-rules JSON and supplemental
   blocklist hashes (not live endpoint payload).
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.8.0` for this
+  release.
 
 ### Fixed
 

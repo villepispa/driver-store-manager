@@ -27,7 +27,7 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 - **Impact:** Validate is softer than WinGet.Audit / spine-automation until Warnings are triaged
 - **Proposed:** Fix or exclude cheap findings; then fail lint on Warning as well as Error
 
-## Resolved issues (Unreleased — DSM-034 / DSM-035 / DSM-037)
+## Resolved issues (2026-08-31 — 0.8.0 — DSM-034 / DSM-035 / DSM-037)
 
 | ID | Summary | Evidence |
 |----|---------|----------|

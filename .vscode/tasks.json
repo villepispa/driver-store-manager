@@ -1,0 +1,101 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "psGateScriptPath",
+      "type": "promptString",
+      "description": "Workspace-relative .ps1 path for ScriptSafetyGate",
+      "default": "scripts/Invoke-DsmValidate.ps1"
+    }
+  ],
+  "tasks": [
+    {
+      "label": "PS gates: PSA lint (call-through)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${env:CURSOR_CONFIG_ROOT}/scripts/Invoke-PSScriptAnalyzerLint.ps1",
+        "-Path",
+        "${workspaceFolder}/scripts",
+        "-AgentSummary"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "PS gates: Pester (workspace tests)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${workspaceFolder}/tests/Invoke-DsmPester.ps1",
+        "-AgentSummary"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "PS gates: ScriptSafetyGate (prompt path)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${env:CURSOR_CONFIG_ROOT}/scripts/Invoke-ScriptSafetyGate.ps1",
+        "-ScriptPath",
+        "${workspaceFolder}/${input:psGateScriptPath}",
+        "-TaskProfile",
+        "ControlledWrite",
+        "-AgentSummary"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "PS gates: WorkspacePsPolicyAudit",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${env:CURSOR_CONFIG_ROOT}/scripts/Invoke-WorkspacePsPolicyAudit.ps1",
+        "-RepoRoot",
+        "${workspaceFolder}",
+        "-AgentSummary"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

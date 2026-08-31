@@ -1,0 +1,11 @@
+{
+  "config": {
+    "extends": ".markdownlint.json"
+  },
+  "ignores": [
+    ".cursor/**",
+    "audit-output/**",
+    "scripts/_drafts/**",
+    "docs/archive/**"
+  ]
+}

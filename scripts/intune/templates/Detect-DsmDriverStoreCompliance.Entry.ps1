@@ -64,6 +64,19 @@ try {
         exit 2
     }
 
+    # Advisory-only (Gate 7 still orphan cleanup). Knobs stay baked so
+    # operators can see intended policy; they do not change the exit code.
+    if ($DsmDetectBlocklisted -and $summary.BlocklistedInUseCount -gt 0) {
+        Write-Verbose (
+            'Advisory: BlocklistedInUseCount={0}' -f $summary.BlocklistedInUseCount
+        )
+    }
+    if ($DsmDetectSignatureIssues -and $summary.SignatureIssueCount -gt 0) {
+        Write-Verbose (
+            'Advisory: SignatureIssueCount={0}' -f $summary.SignatureIssueCount
+        )
+    }
+
     if ($cleanupRequired) {
         exit 1
     }

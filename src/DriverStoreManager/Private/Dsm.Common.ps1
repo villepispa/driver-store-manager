@@ -99,7 +99,12 @@ function Invoke-DsmPnPUtil {
     $stderrAsync = $proc.StandardError.ReadToEndAsync()
 
     if (-not $proc.WaitForExit(600000)) {
-        try { $proc.Kill() } catch { }
+        try {
+            $proc.Kill()
+        }
+        catch {
+            Write-Verbose ("pnputil Kill after timeout: {0}" -f $_.Exception.Message)
+        }
         throw 'pnputil timed out after 600 seconds.'
     }
 

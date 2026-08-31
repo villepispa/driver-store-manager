@@ -74,7 +74,10 @@ Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force `
 ```
 
 Repo-root gate for agents and CI (Intune build → PS 5.1 smoke → Pester →
-PSScriptAnalyzer). Fails fast with `DSM-VALIDATE-FAIL stage=deps` when those
+PSScriptAnalyzer). Lint fails on **Error and Warning**, matching WinGet.Audit
+and spine-automation. Remaining exclusions are documented in
+`PSScriptAnalyzerSettings.psd1` (`PSAvoidUsingWriteHost`,
+`PSUseSingularNouns`). Fails fast with `DSM-VALIDATE-FAIL stage=deps` when those
 modules are missing (does not auto-install). Rebuilds `dist/intune/` (Safety
 tier 2).
 

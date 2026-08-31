@@ -7,12 +7,15 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-### Added
-
-- **DSM-036:** Filed Open — align PSA gate with siblings (fail on Warning).
-  Forty-six Warnings remain after DSM-034 Error-only lint. See `docs/issues.md`.
-
 ### Changed
+
+- **DSM-036:** `Invoke-DsmScriptAnalyzer` fails on Error **and** Warning
+  (WGA/spine). Documented ExcludeRules: `PSAvoidUsingWriteHost`,
+  `PSUseSingularNouns`. Cheap remaining findings fixed (unused detect knobs
+  → Verbose advisory; empty catch → Verbose; drop unused `ValueFromPipeline`
+  on array helpers; `VulnerableIncludesSignature` is `[bool]` default `$true`).
+  PS 5.1 smoke still used `data/` after DSM-037 rename — pointed at
+  `examples/`. PCB `2026-08-31_dsm-036-psa-warning-fail`.
 
 - Dual-host CI: `actions/checkout@v4` → `@v7` (Node 24).
 - VirusTotal workflow: `actions/upload-artifact@v4` → `@v7` (Node 24). GitHub

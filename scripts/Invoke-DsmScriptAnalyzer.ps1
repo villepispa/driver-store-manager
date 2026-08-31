@@ -19,8 +19,9 @@
 
 .PARAMETER AgentSummary
   One success-stream line for bare pwsh -File:
-  DSM-LINT-OK findings=N | DSM-LINT-FAIL exit=1 findings=N |
-  DSM-LINT-MISS (module missing, exit 2).
+  DSM-LINT-OK findings=0 files=N | DSM-LINT-FAIL exit=1 findings=N |
+  DSM-LINT-MISS (module missing, exit 2). Fails on Error and Warning
+  (WGA/spine). Remaining rules: PSScriptAnalyzerSettings.psd1 ExcludeRules.
 
 .EXAMPLE
   pwsh -NoProfile -File .\scripts\Invoke-DsmScriptAnalyzer.ps1 -AgentSummary
@@ -106,27 +107,22 @@ foreach ($scriptPath in $uniqueFiles) {
     )
 }
 
-# Fail on Error only (Warning noise on a first full scan is documented,
-# not a gate). Sibling WGA/spine fail on Warning too once the tree is quiet.
-$errorFindings = @($findings | Where-Object { $_.Severity -eq 'Error' })
-$errorCount = $errorFindings.Count
-$total = @($findings).Count
-
-if ($errorCount -gt 0) {
+# Fail on any Error or Warning (WGA/spine). Settings ExcludeRules is the
+# documented allow-list for remaining style noise (DSM-036).
+$count = @($findings).Count
+if ($count -gt 0) {
     $findings |
         Format-Table -AutoSize RuleName, Severity, ScriptName, Line, Message |
         Out-Host
     if ($AgentSummary) {
-        Write-Output (
-            'DSM-LINT-FAIL exit=1 findings={0} errors={1}' -f $total, $errorCount
-        )
+        Write-Output ('DSM-LINT-FAIL exit=1 findings={0}' -f $count)
     }
     exit 1
 }
 
 if ($AgentSummary) {
     Write-Output (
-        'DSM-LINT-OK findings={0} errors=0 files={1}' -f $total, $uniqueFiles.Count
+        'DSM-LINT-OK findings=0 files={0}' -f $uniqueFiles.Count
     )
 }
 exit 0

@@ -66,7 +66,7 @@ function Get-DsmDriverStoreReport {
         [int] $MicrosoftBlocklistMaxAgeDays = 7,
         [switch] $SkipMicrosoftBlocklist,
         [switch] $IncludeVulnerabilityScan,
-        [switch] $VulnerableIncludesSignature = $true,
+        [bool] $VulnerableIncludesSignature = $true,
 
         [ValidateSet('ProviderOriginalName', 'HwId')]
         [string] $FamilyGroupBy = 'ProviderOriginalName',

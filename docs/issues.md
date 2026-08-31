@@ -15,23 +15,25 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 ## Open issues
 
-| ID | Summary | Status | Notes |
-|----|---------|--------|-------|
-| DSM-036 | Align PSA gate with WGA/spine (fail on Warning) | Open | First full scan: 46 Warnings (`PSAvoidUsingWriteHost`, `PSUseSingularNouns`, unused vars). **DSM-034** lint fails on **Error** only. **AC:** `Invoke-DsmScriptAnalyzer` fails on Error **and** Warning (or a documented ExcludeRules set); `DSM-VALIDATE-OK` still green; README notes the match. Origin: DSM-036 filing 2026-08-18. |
+None.
+
+## Resolved issues (Unreleased — DSM-036 / DSM-038)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-036 | Align PSA gate with WGA/spine (fail on Warning) | `DSM-LINT-OK findings=0`; `DSM-VALIDATE-OK`; README Validate notes Error+Warning |
+| DSM-038 | Single-row pnputil CSV unwraps; PS 5.1 StrictMode `.Count` throws | Dual-host `Pester (powershell)` failed; local 5.1 `DSM-PESTER-OK passed=82` (1 inconclusive); pwsh **83/83**; wrap `@()` in `ConvertFrom-PnPUtilDriverCsv` |
 
 ### DSM-036 — PSA Warning-fail to match siblings
 
-- **Status:** Open
+- **Status:** Resolved
 - **Severity:** Low
 - **Area:** Agent-ready gates / PSScriptAnalyzer
 - **Impact:** Validate is softer than WinGet.Audit / spine-automation until Warnings are triaged
 - **Proposed:** Fix or exclude cheap findings; then fail lint on Warning as well as Error
-
-## Resolved issues (Unreleased — DSM-038)
-
-| ID | Summary | Evidence |
-|----|---------|----------|
-| DSM-038 | Single-row pnputil CSV unwraps; PS 5.1 StrictMode `.Count` throws | Dual-host `Pester (powershell)` failed; local 5.1 `DSM-PESTER-OK passed=82` (1 inconclusive); pwsh **83/83**; wrap `@()` in `ConvertFrom-PnPUtilDriverCsv` |
+- **Remediation:** Fail on any Error/Warning. Exclude `PSAvoidUsingWriteHost` and `PSUseSingularNouns`. Fix unused detect knobs (Verbose advisory), empty catch, unused pipeline attributes, default-on switch → `[bool]`.
+- **Evidence:** `DSM-LINT-OK findings=0 files=29`; `DSM-VALIDATE-OK` (Pester 83/83; PS 5.1 smoke OK).
+- **Resolution:** Source + settings + README 2026-08-31; PCB `2026-08-31_dsm-036-psa-warning-fail`.
 
 ### DSM-038 — Single-row driver CSV Count under StrictMode
 

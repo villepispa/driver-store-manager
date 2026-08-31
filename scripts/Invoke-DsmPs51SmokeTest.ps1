@@ -59,7 +59,7 @@ function Test-SmokeAssert {
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $harnessPath = Join-Path $projectRoot 'tests\helpers\Import-DsmTestHarness.ps1'
 $fixtureRoot = Join-Path $projectRoot 'tests\fixtures'
-$preserveRulesPath = Join-Path $projectRoot 'data\preserve-rules.example.json'
+$preserveRulesPath = Join-Path $projectRoot 'examples\preserve-rules.example.json'
 $detectBundle = Join-Path $projectRoot 'dist\intune\Detect-DsmDriverStoreCompliance.ps1'
 $remediateBundle = Join-Path $projectRoot 'dist\intune\Remediate-DsmDriverStore.ps1'
 $smokeRoot = Join-Path $env:TEMP ("dsm-ps51-smoke_{0}" -f ([Guid]::NewGuid().ToString('N')))

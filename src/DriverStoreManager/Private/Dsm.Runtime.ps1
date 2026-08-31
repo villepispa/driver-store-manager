@@ -67,7 +67,6 @@ function Write-DsmObjectArray {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(ValueFromPipeline)]
         [AllowNull()]
         $InputObject
     )
@@ -87,7 +86,6 @@ function Get-DsmObjectArray {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(ValueFromPipeline)]
         [AllowNull()]
         $InputObject
     )

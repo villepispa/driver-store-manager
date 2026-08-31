@@ -31,10 +31,10 @@ function Get-DsmDriverStoreReport {
     .OUTPUTS
         PSCustomObject with Global, Scoped, FilterManifest, GeneratedAt.
     .EXAMPLE
-        Get-DsmDriverStoreReport -BlocklistPath .\data\blocklist-hashes.example.txt
+        Get-DsmDriverStoreReport -BlocklistPath .\examples\blocklist-hashes.example.txt
     .EXAMPLE
         $f = New-DsmDriverFilter -Provider 'Synaptics*'
-        Get-DsmDriverStoreReport -Filter $f -PreserveRulesPath .\data\preserve-rules.example.json
+        Get-DsmDriverStoreReport -Filter $f -PreserveRulesPath .\examples\preserve-rules.example.json
     #>
     [CmdletBinding()]
     param(

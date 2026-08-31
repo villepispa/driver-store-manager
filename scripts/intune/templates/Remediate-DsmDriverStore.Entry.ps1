@@ -1,9 +1,21 @@
 # --- Intune remediation entry (merged by Build-DsmIntuneScripts.ps1 from Remediate-DsmDriverStore.Entry.ps1) ---
 $ErrorActionPreference = 'Stop'
 
+# region DSM_BUILD_CONFIG
 $DsmRemediationMaxDeletes = 10
 $DsmRemediationRequireElevation = $true
 $DsmPreserveRulesPath = $null
+$DsmInlinePreserveRulesContent = $null
+# endregion DSM_BUILD_CONFIG
+
+if ($DsmInlinePreserveRulesContent) {
+    $inlineRoot = Get-DsmProgramDataRoot -ChildPath @('config', 'inline')
+    if (-not (Test-Path -LiteralPath $inlineRoot)) {
+        New-Item -ItemType Directory -Path $inlineRoot -Force | Out-Null
+    }
+    $DsmPreserveRulesPath = Join-DsmPath $inlineRoot 'preserve-rules.json'
+    Set-DsmContentUtf8 -LiteralPath $DsmPreserveRulesPath -Value $DsmInlinePreserveRulesContent
+}
 
 $DsmStateRoot = Get-DsmProgramDataRoot
 $DsmBackupRoot = Join-DsmPath $DsmStateRoot 'backups' (Get-Date -Format 'yyyy-MM-dd_HHmmss')

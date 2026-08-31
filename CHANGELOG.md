@@ -7,6 +7,42 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Added
+
+- **DSM-037:** `Build-DsmIntuneScripts.ps1` bakes detect/remediate knobs
+  (`-OrphanThreshold`, `-RemediationMaxDeletes`, Microsoft blocklist flags,
+  and others). Intune Detection and Remediation cannot take runtime parameters.
+  Configuration files: **path-only** (`-PreserveRulesPath` /
+  `-BlocklistPath`) or **inline** (`-InlinePreserveRulesFile` /
+  `-InlineBlocklistFile`) so the generated scripts are self-contained. Preserve
+  inline content is also baked into Remediation. Tests:
+  `tests/Build-DsmIntuneScripts.Tests.ps1`. **82/82** Pester; `DSM-BUILD-OK`
+  detectBytes=176798 config=none.
+- **DSM-036:** Filed Open — align PSA gate with siblings (fail on Warning).
+  Forty-six Warnings remain after DSM-034 Error-only lint. See `docs/issues.md`.
+- **DSM-034:** Repo-root validate trio — `PSScriptAnalyzerSettings.psd1`,
+  `scripts/Invoke-DsmScriptAnalyzer.ps1`, `scripts/Invoke-DsmValidate.ps1`
+  (build → PS 5.1 smoke → Pester → lint). README **Validate**. Lint gate
+  fails on **Error** only (Warning noise on a first full scan).
+- **DSM-035:** Dual-host GitHub Actions (`.github/workflows/dual-host-ps.yml`)
+  — Pester via `tests/Invoke-DsmPester.ps1` on `pwsh` and Windows PowerShell
+  5.1, then Intune build + `Invoke-DsmPs51SmokeTest.ps1`.
+- Call-through VS Code tasks (`.vscode/tasks.json`); ScriptSafetyGate default
+  is `Invoke-DsmValidate.ps1` with TaskProfile **ControlledWrite**.
+- Repo-root `.markdownlint-cli2.jsonc` ignores (`.cursor/`, `audit-output/`,
+  drafts, `docs/archive/`) so `markdownlint-cli2` matches sibling products.
+
+### Changed
+
+- **`data/` → `examples/`** — sample preserve-rules JSON and supplemental
+  blocklist hashes (not live endpoint payload).
+
+### Fixed
+
+- `New-DsmCleanupResultRow` parameter `$Error` renamed to `$ErrorMessage`
+  (`PSAvoidAssignmentToAutomaticVariable`). Result row property remains
+  `Error`.
+
 ## [0.7.10] — 2026-07-28
 
 ### Changed

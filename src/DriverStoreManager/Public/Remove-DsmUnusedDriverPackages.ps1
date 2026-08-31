@@ -13,7 +13,7 @@ function Remove-DsmUnusedDriverPackages {
     .PARAMETER PreserveRule
         Preserve rules applied before candidate selection.
     .PARAMETER PreserveRulesPath
-        JSON preserve rules file (see data/preserve-rules.example.json).
+        JSON preserve rules file (see examples/preserve-rules.example.json).
     .PARAMETER IncludePublishedName
         Optional allow-list of oem#.inf names (intersected with deletable set).
     .PARAMETER MaxDeletes
@@ -25,7 +25,7 @@ function Remove-DsmUnusedDriverPackages {
     .EXAMPLE
         Remove-DsmUnusedDriverPackages -WhatIf
     .EXAMPLE
-        Remove-DsmUnusedDriverPackages -PreserveRulesPath .\data\preserve-rules.example.json -WhatIf
+        Remove-DsmUnusedDriverPackages -PreserveRulesPath .\examples\preserve-rules.example.json -WhatIf
     .EXAMPLE
         $f = New-DsmDriverFilter -DriverClass 'Printer' -Association NeverAssociated
         Remove-DsmUnusedDriverPackages -Filter $f -WhatIf -PassThru
@@ -187,7 +187,7 @@ function Remove-DsmUnusedDriverPackages {
         }
         catch {
             $row = New-DsmCleanupResultRow -Package $pkg -FamilyContext $familyContext `
-                -Action 'ExportOrDeleteFailed' -Error $_.Exception.Message
+                -Action 'ExportOrDeleteFailed' -ErrorMessage $_.Exception.Message
             $exportFailedCount++
         }
 

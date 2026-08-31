@@ -27,7 +27,7 @@
   Refresh the Microsoft cache when older than this many days. Default: 7.
 
 .PARAMETER PreserveRulesPath
-  Optional preserve rules JSON (see data/preserve-rules.example.json).
+  Optional preserve rules JSON (see examples/preserve-rules.example.json).
 
 .PARAMETER IncludeCleanupPreview
   Emit WhatIf cleanup candidates to a separate JSON file under -OutputPath.
@@ -49,11 +49,11 @@
 
 .EXAMPLE
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-DsmDriverStoreAudit.ps1 `
-    -OutputPath .\audit-output -BlocklistPath .\data\blocklist-hashes.example.txt
+    -OutputPath .\audit-output -BlocklistPath .\examples\blocklist-hashes.example.txt
 
 .EXAMPLE
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-DsmDriverStoreAudit.ps1 `
-    -OutputPath .\audit-output -PreserveRulesPath .\data\preserve-rules.example.json -IncludeCleanupPreview
+    -OutputPath .\audit-output -PreserveRulesPath .\examples\preserve-rules.example.json -IncludeCleanupPreview
 
 .EXAMPLE
   pwsh -NoProfile -File .\scripts\Invoke-DsmDriverStoreAudit.ps1 -OutputPath .\audit-output -AgentSummary

@@ -65,7 +65,7 @@ in the **scoped** set are delete candidates (same as report `DeletableCandidateC
 Packages with `Preserved = $true` (from `Invoke-DsmPreservePolicy`) are **never**
 deleted. Preserve is independent of `InUse` — protects latest DisplayLink per family,
 printer queue drivers, unplugged USB packages per operator rules.
-See `data/preserve-rules.example.json`.
+See `examples/preserve-rules.example.json`.
 
 ## Gate 7 — Vulnerability scan is advisory
 

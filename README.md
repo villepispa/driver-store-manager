@@ -16,7 +16,7 @@ Get-DsmDriverStoreInventory |
 
 # Filter OEM scope + preserve policy
 $inv = Get-DsmDriverStoreInventory
-Invoke-DsmPreservePolicy -Inventory $inv -PreserveRulesPath .\data\preserve-rules.example.json
+Invoke-DsmPreservePolicy -Inventory $inv -PreserveRulesPath .\examples\preserve-rules.example.json
 
 # Printer drivers (disconnected installed bucket)
 $f = New-DsmDriverFilter -DriverClass 'Printer' -Association DisconnectedInstalled
@@ -24,8 +24,8 @@ Invoke-DsmDriverFilter -Inventory $inv -Filter $f
 
 # Full audit report (Microsoft blocklist auto-refreshes; optional supplemental file)
 .\scripts\Invoke-DsmDriverStoreAudit.ps1 -OutputPath .\audit-output `
-    -PreserveRulesPath .\data\preserve-rules.example.json `
-    -BlocklistPath .\data\blocklist-hashes.example.txt
+    -PreserveRulesPath .\examples\preserve-rules.example.json `
+    -BlocklistPath .\examples\blocklist-hashes.example.txt
 
 # Refresh Microsoft blocklist cache manually
 Update-DsmMicrosoftDriverBlocklist -Force
@@ -38,7 +38,7 @@ Test-DsmDriverVulnerabilities -Inventory (Get-DsmDriverStoreInventory)
 Cleanup preview (module API — safer than running the Intune remediate bundle):
 
 ```powershell
-Remove-DsmUnusedDriverPackages -PreserveRulesPath .\data\preserve-rules.example.json -WhatIf -PassThru
+Remove-DsmUnusedDriverPackages -PreserveRulesPath .\examples\preserve-rules.example.json -WhatIf -PassThru
 
 # Audit with cleanup preview JSON
 .\scripts\Invoke-DsmDriverStoreAudit.ps1 -OutputPath .\audit-output -IncludeCleanupPreview
@@ -62,6 +62,41 @@ Remove-DsmUnusedDriverPackages -PreserveRulesPath .\data\preserve-rules.example.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-DsmPs51SmokeTest.ps1
 ```
 
+## Validate
+
+One-time Gallery deps (CurrentUser) if missing:
+
+```powershell
+Install-Module -Name Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force `
+  -SkipPublisherCheck
+Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force `
+  -SkipPublisherCheck
+```
+
+Repo-root gate for agents and CI (Intune build → PS 5.1 smoke → Pester →
+PSScriptAnalyzer). Fails fast with `DSM-VALIDATE-FAIL stage=deps` when those
+modules are missing (does not auto-install). Rebuilds `dist/intune/` (Safety
+tier 2).
+
+```powershell
+pwsh -NoProfile -File .\scripts\Invoke-DsmValidate.ps1 -AgentSummary
+```
+
+Individual stages:
+
+```powershell
+pwsh -NoProfile -File .\scripts\Build-DsmIntuneScripts.ps1 -AgentSummary
+powershell.exe -NoProfile -File .\scripts\Invoke-DsmPs51SmokeTest.ps1 -AgentSummary
+pwsh -NoProfile -File .\tests\Invoke-DsmPester.ps1 -AgentSummary
+pwsh -NoProfile -File .\scripts\Invoke-DsmScriptAnalyzer.ps1 -AgentSummary
+```
+
+Optional Task palette (needs `CURSOR_CONFIG_ROOT`): `.vscode/tasks.json`.
+GitHub Actions: [`.github/workflows/dual-host-ps.yml`](.github/workflows/dual-host-ps.yml)
+runs Pester on `pwsh` and Windows PowerShell 5.1, then build + 5.1 smoke.
+
+README remains the agent SSOT for this product — no `AGENTS.md`.
+
 ## Intune — build and test locally
 
 Intune Proactive Remediation runs **Windows PowerShell 5.1** (64-bit, **SYSTEM**).
@@ -77,6 +112,20 @@ Edit module source under `src/`; generate upload scripts — do **not** hand-edi
 # Optional agent one-liner: .\scripts\Build-DsmIntuneScripts.ps1 -AgentSummary
 # → dist/intune/Detect-DsmDriverStoreCompliance.ps1
 # → dist/intune/Remediate-DsmDriverStore.ps1
+
+# Path-only: bake on-endpoint paths (deploy the files separately).
+# Preserve path → Detection and Remediation. Blocklist path → Detection only.
+.\scripts\Build-DsmIntuneScripts.ps1 `
+    -PreserveRulesPath 'C:\ProgramData\DriverStoreManager\config\preserve-rules.json' `
+    -BlocklistPath 'C:\ProgramData\DriverStoreManager\config\blocklist-hashes.txt'
+
+# Inline: embed content in the generated scripts (no Intune runtime params).
+# Preserve rules → both scripts; each writes ProgramData itself so cleanup
+# does not depend on Detection having run. Blocklist → Detection only
+# (Gate 7, advisory; Remove-DsmUnusedDriverPackages has no BlocklistPath).
+.\scripts\Build-DsmIntuneScripts.ps1 `
+    -InlinePreserveRulesFile .\examples\preserve-rules.example.json `
+    -InlineBlocklistFile .\examples\blocklist-hashes.example.txt
 ```
 
 Rebuild after any `src/` or `scripts/intune/templates/` change before upload.
@@ -116,7 +165,7 @@ For local preview, use the module instead:
 
 ```powershell
 Import-Module .\src\DriverStoreManager\DriverStoreManager.psd1 -Force
-Remove-DsmUnusedDriverPackages -PreserveRulesPath .\data\preserve-rules.example.json -WhatIf -PassThru
+Remove-DsmUnusedDriverPackages -PreserveRulesPath .\examples\preserve-rules.example.json -WhatIf -PassThru
 ```
 
 Only run the remediate bundle on an isolated VM / pilot device after reviewing

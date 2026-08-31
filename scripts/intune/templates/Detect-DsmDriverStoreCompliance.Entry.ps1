@@ -1,14 +1,36 @@
 # --- Intune detection entry (merged by Build-DsmIntuneScripts.ps1 from Detect-DsmDriverStoreCompliance.Entry.ps1) ---
 $ErrorActionPreference = 'Stop'
 
+# region DSM_BUILD_CONFIG
 $DsmDetectBlocklisted = $true
 $DsmDetectSignatureIssues = $true
 $DsmDetectOrphanCandidates = $true
 $DsmOrphanThreshold = 1
-$DsmBlocklistPath = $null
 $DsmSkipMicrosoftBlocklist = $false
 $DsmForceBlocklistUpdate = $false
+$DsmBlocklistPath = $null
 $DsmPreserveRulesPath = $null
+$DsmInlineBlocklistContent = $null
+$DsmInlinePreserveRulesContent = $null
+# endregion DSM_BUILD_CONFIG
+
+if ($DsmInlineBlocklistContent) {
+    $inlineRoot = Get-DsmProgramDataRoot -ChildPath @('config', 'inline')
+    if (-not (Test-Path -LiteralPath $inlineRoot)) {
+        New-Item -ItemType Directory -Path $inlineRoot -Force | Out-Null
+    }
+    $DsmBlocklistPath = Join-DsmPath $inlineRoot 'blocklist-hashes.txt'
+    Set-DsmContentUtf8 -LiteralPath $DsmBlocklistPath -Value $DsmInlineBlocklistContent
+}
+
+if ($DsmInlinePreserveRulesContent) {
+    $inlineRoot = Get-DsmProgramDataRoot -ChildPath @('config', 'inline')
+    if (-not (Test-Path -LiteralPath $inlineRoot)) {
+        New-Item -ItemType Directory -Path $inlineRoot -Force | Out-Null
+    }
+    $DsmPreserveRulesPath = Join-DsmPath $inlineRoot 'preserve-rules.json'
+    Set-DsmContentUtf8 -LiteralPath $DsmPreserveRulesPath -Value $DsmInlinePreserveRulesContent
+}
 
 $DsmReportRoot = Get-DsmProgramDataRoot -ChildPath @('reports', 'intune-detection')
 if (-not (Test-Path -LiteralPath $DsmReportRoot)) {

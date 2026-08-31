@@ -15,7 +15,49 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 ## Open issues
 
-_(None.)_
+| ID | Summary | Status | Notes |
+|----|---------|--------|-------|
+| DSM-036 | Align PSA gate with WGA/spine (fail on Warning) | Open | First full scan: 46 Warnings (`PSAvoidUsingWriteHost`, `PSUseSingularNouns`, unused vars). **DSM-034** lint fails on **Error** only. **AC:** `Invoke-DsmScriptAnalyzer` fails on Error **and** Warning (or a documented ExcludeRules set); `DSM-VALIDATE-OK` still green; README notes the match. Origin: DSM-036 filing 2026-08-18. |
+
+### DSM-036 — PSA Warning-fail to match siblings
+
+- **Status:** Open
+- **Severity:** Low
+- **Area:** Agent-ready gates / PSScriptAnalyzer
+- **Impact:** Validate is softer than WinGet.Audit / spine-automation until Warnings are triaged
+- **Proposed:** Fix or exclude cheap findings; then fail lint on Warning as well as Error
+
+## Resolved issues (Unreleased — DSM-034 / DSM-035 / DSM-037)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-037 | Parameterize Intune build; rename `data/` to `examples/` | Pester **82/82** (`Build-DsmIntuneScripts.Tests.ps1` 5/5); `DSM-BUILD-OK` detectBytes=176798 config=none |
+| DSM-034 | Repo-root validate trio (PSA settings, ScriptAnalyzer, `Invoke-DsmValidate`) | Local `DSM-VALIDATE-OK` (Pester 77/77, lint findings=46 errors=0 files=29) |
+| DSM-035 | Dual-host GitHub Actions (`dual-host-ps.yml`) | Workflow present; Pester via product runner (Pester 6+); smoke builds then `Invoke-DsmPs51SmokeTest.ps1` |
+
+### DSM-037 — Intune build configuration and examples folder
+
+- **Status:** Resolved
+- **Severity:** Medium
+- **Area:** Intune / build
+- **Evidence:** `tests/Build-DsmIntuneScripts.Tests.ps1`; `DSM-PESTER-OK passed=82`; default `dist/intune` rebuild
+- **Remediation:** Build-time knobs; path-only vs inline config files; `data/` renamed to `examples/`; preserve inline also baked into Remediation
+
+### DSM-034 — Validate trio
+
+- **Status:** Resolved
+- **Severity:** Low
+- **Area:** Agent-ready gates
+- **Evidence:** `pwsh -NoProfile -File .\scripts\Invoke-DsmValidate.ps1 -AgentSummary` → `DSM-VALIDATE-OK` (2026-08-18). First run failed lint on `$Error` param; after rename, Error count 0. Lint fails on **Error** only.
+- **Remediation:** Product PSA settings + orchestrator (Safety tier 2 because build writes `dist/intune`)
+
+### DSM-035 — Dual-host CI
+
+- **Status:** Resolved
+- **Severity:** Low
+- **Area:** CI
+- **Evidence:** `.github/workflows/dual-host-ps.yml` (not yet proven on GitHub runners)
+- **Remediation:** Copy of dual-host template customized for `tests/Invoke-DsmPester.ps1` and Intune build-before-smoke
 
 ## Resolved issues (2026-07-28 — DSM-033)
 
@@ -136,6 +178,8 @@ rebuilt `dist/intune/*.ps1`.
 ## Activity
 
 <!-- ISSUES-ACTIVITY+ -->
+- **2026-08-31 13:12:00** — Resolved `DSM-037`: parameterized Intune build (path vs inline config); `data/` → `examples/`; **82/82** Pester; `DSM-BUILD-OK`.
+- **2026-08-31 12:50:00** — Filed `DSM-037`: parameterized Intune build (path vs inline config) and `data/` → `examples/` rename.
 - **2026-07-28 07:40:40** — Resolved `DSM-033`: StrictMode-safe `Preserved` reads for orphan/deletable helpers; detect no longer throws `PropertyNotFoundStrict` on vuln scan path. Follow-up: sealed build/Pester, rebuilt bundles, **77/77** Pester (`DriverDate`/HashSet/`PassThru` hardening).
 - **2026-07-28 07:12:21** — Reconciled PM state drift: `DSM-027` and Reliability milestone marked `done` in `.cursor/project-management.json` (canonical register already had no Open issues).
 - **2026-07-13 17:04:00** — Resolved `DSM-026` and `DSM-027`: expanded PS 5.1 smoke (`Set-StrictMode`, mocked correlation/XML/preserve/UTF-8/bundles); added `DriverStoreManager.CleanupMocks.Tests.ps1`; strict-mode hardening across CSV, preserve, filter, report, and cleanup modules; 76/76 Pester pass; PS 5.1 smoke PASS.

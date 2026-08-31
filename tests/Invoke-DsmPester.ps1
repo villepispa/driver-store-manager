@@ -40,6 +40,7 @@ param(
         (Join-Path $PSScriptRoot 'DriverStoreManager.Tests.ps1')
         (Join-Path $PSScriptRoot 'DriverStoreManager.MockedPnPUtil.Tests.ps1')
         (Join-Path $PSScriptRoot 'DriverStoreManager.CleanupMocks.Tests.ps1')
+        (Join-Path $PSScriptRoot 'Build-DsmIntuneScripts.Tests.ps1')
     ),
 
     [switch] $AgentSummary

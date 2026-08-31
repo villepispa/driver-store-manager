@@ -22,7 +22,7 @@ function Invoke-DsmPreservePolicy {
         )
         Invoke-DsmPreservePolicy -Inventory $inv -PreserveRule $rules
     .EXAMPLE
-        Invoke-DsmPreservePolicy -Inventory $inv -PreserveRulesPath .\data\preserve-rules.example.json
+        Invoke-DsmPreservePolicy -Inventory $inv -PreserveRulesPath .\examples\preserve-rules.example.json
     #>
     [CmdletBinding()]
     param(

@@ -13,6 +13,35 @@ cd projects\driver-store-manager
 .\scripts\Build-DsmIntuneScripts.ps1
 ```
 
+Knobs (`-OrphanThreshold`, `-RemediationMaxDeletes`, Microsoft blocklist flags,
+and others) are baked at build time — Intune Detection and Remediation cannot
+take runtime parameters. Configuration files have two modes (mutually exclusive
+per file):
+
+| Mode | Build parameters | When to use |
+|------|------------------|-------------|
+| **Path-only** | `-PreserveRulesPath`, `-BlocklistPath` | Files already on the endpoint (Win32, SMB, or ProgramData). Preserve path is baked into both scripts; blocklist path into Detection only. |
+| **Inline** | `-InlinePreserveRulesFile`, `-InlineBlocklistFile` | Self-contained scripts (no extra files on the endpoint). Preserve content is inlined into **both** scripts; blocklist into Detection only. |
+
+```powershell
+# Path-only
+.\scripts\Build-DsmIntuneScripts.ps1 `
+    -PreserveRulesPath 'C:\ProgramData\DriverStoreManager\config\preserve-rules.json' `
+    -BlocklistPath 'C:\ProgramData\DriverStoreManager\config\blocklist-hashes.txt'
+
+# Inline (embed content in the generated scripts)
+.\scripts\Build-DsmIntuneScripts.ps1 `
+    -InlinePreserveRulesFile .\examples\preserve-rules.example.json `
+    -InlineBlocklistFile .\examples\blocklist-hashes.example.txt
+```
+
+Intune Detection and Remediation are **separate process launches**. Detection
+does **not** deliver config files for cleanup. Preserve rules belong in both
+scripts so `DeletableCandidateCount` matches Gate 6b deletion; each inline
+script writes `%ProgramData%\DriverStoreManager\config\inline\` itself.
+Blocklist hashes are Detection-only (Gate 7 — advisory scan;
+`Remove-DsmUnusedDriverPackages` has no `-BlocklistPath`).
+
 Outputs:
 
 | File | Role |
@@ -126,12 +155,17 @@ Avoid in shared code: `??`, ternary `? :`, `ForEach-Object -Parallel`, chained
 ## Blocklist in Intune
 
 Bundle a blocklist file via a separate Intune win32/package delivery, or host on a
-read-only SMB share. Set `$DsmBlocklistPath` for **supplemental** hashes merged with the
-auto-updated Microsoft cache (downloaded from `https://aka.ms/VulnerableDriverBlockList`
+read-only SMB share. Pass `-BlocklistPath` to `Build-DsmIntuneScripts.ps1` (path-only
+mode) for **supplemental** hashes merged with the auto-updated Microsoft cache
+(downloaded from `https://aka.ms/VulnerableDriverBlockList`
 into `%ProgramData%\DriverStoreManager\blocklist\microsoft\` every 7 days).
 
+Alternatively, pass `-InlineBlocklistFile` so the generated Detection script
+embeds the hash file and writes it under ProgramData at runtime (no separate
+file delivery). Remediation never reads that file.
+
 Detection uses the Microsoft cache by default; optional `$DsmBlocklistPath` adds more hashes.
-Use `$DsmSkipMicrosoftBlocklist = $true` in a customized template for offline-only feeds.
+Use `-SkipMicrosoftBlocklist $true` on the build for offline-only feeds.
 
 Compliance checks (detection script):
 

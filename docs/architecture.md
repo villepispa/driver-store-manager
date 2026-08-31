@@ -65,7 +65,7 @@ Driver family keys (`Get-DsmDriverFamilyKey`): `Provider + OriginalName` (defaul
 | `KeepPublishedName` | Explicit `oem#.inf` list |
 | `KeepMatching` | All packages matching filter (printers, unplugged USB, …) |
 
-JSON rules: `data/preserve-rules.example.json`. Independent of `InUse`.
+JSON rules: `examples/preserve-rules.example.json`. Independent of `InUse`.
 
 ## Reporting (Phase 3d)
 

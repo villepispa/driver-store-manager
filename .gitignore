@@ -18,6 +18,9 @@ Thumbs.db
 # Historical session exports (absorbed into living docs; keep local only)
 docs/archive/
 
+# Pre-change snapshots (PCB); keep local only
+_archive/
+
 # Ad-hoc drafts (may contain host paths)
 scripts/_drafts/
 tests/_drafts/

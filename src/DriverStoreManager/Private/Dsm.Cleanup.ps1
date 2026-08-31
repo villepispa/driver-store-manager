@@ -240,7 +240,7 @@ function New-DsmCleanupResultRow {
 
         [string] $BackupPath,
 
-        [string] $Error
+        [string] $ErrorMessage
     )
 
     $meta = Get-DsmDriverPackageInfMetadata -Package $Package
@@ -283,7 +283,7 @@ function New-DsmCleanupResultRow {
         Action                     = $Action
         Timestamp                  = Get-Date
         BackupPath                 = $BackupPath
-        Error                      = $Error
+        Error                      = $ErrorMessage
     }
 }
 

@@ -12,6 +12,12 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 - **DSM-036:** Filed Open — align PSA gate with siblings (fail on Warning).
   Forty-six Warnings remain after DSM-034 Error-only lint. See `docs/issues.md`.
 
+### Changed
+
+- Dual-host CI: `actions/checkout@v4` → `@v7` (Node 24).
+- VirusTotal workflow: `actions/upload-artifact@v4` → `@v7` (Node 24). GitHub
+  hosted runners deprecated Node 20 and warned on the v0.8.0 scan.
+
 ### Fixed
 
 - **DSM-038:** `ConvertFrom-PnPUtilDriverCsv` wraps `ConvertFrom-DsmCsvText`
@@ -20,11 +26,6 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   line 186). Dual-host CI `Pester (powershell)` failed; `Pester (pwsh)` did
   not. Tests: `ConvertFrom-PnPUtilDriverCsv` single-row StrictMode case;
   existing mocked never-associated preview.
-
-### Changed
-
-- VirusTotal workflow: `actions/upload-artifact@v4` → `@v7` (Node 24). GitHub
-  hosted runners deprecated Node 20 and warned on the v0.8.0 scan.
 
 ## [0.8.0] — 2026-08-31
 

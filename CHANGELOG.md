@@ -21,6 +21,11 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   not. Tests: `ConvertFrom-PnPUtilDriverCsv` single-row StrictMode case;
   existing mocked never-associated preview.
 
+### Changed
+
+- VirusTotal workflow: `actions/upload-artifact@v4` → `@v7` (Node 24). GitHub
+  hosted runners deprecated Node 20 and warned on the v0.8.0 scan.
+
 ## [0.8.0] — 2026-08-31
 
 ### Added

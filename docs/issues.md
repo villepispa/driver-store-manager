@@ -17,7 +17,7 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
-## Resolved issues (Unreleased — DSM-036 / DSM-038)
+## Resolved issues (2026-09-01 — 0.8.1 — DSM-036 / DSM-038)
 
 | ID | Summary | Evidence |
 |----|---------|----------|

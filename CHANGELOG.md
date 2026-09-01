@@ -7,6 +7,10 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+_Nothing queued — latest release: **0.8.1**._
+
+## [0.8.1] — 2026-09-01
+
 ### Changed
 
 - **DSM-036:** `Invoke-DsmScriptAnalyzer` fails on Error **and** Warning
@@ -16,10 +20,11 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   on array helpers; `VulnerableIncludesSignature` is `[bool]` default `$true`).
   PS 5.1 smoke still used `data/` after DSM-037 rename — pointed at
   `examples/`. PCB `2026-08-31_dsm-036-psa-warning-fail`.
-
 - Dual-host CI: `actions/checkout@v4` → `@v7` (Node 24).
 - VirusTotal workflow: `actions/upload-artifact@v4` → `@v7` (Node 24). GitHub
   hosted runners deprecated Node 20 and warned on the v0.8.0 scan.
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.8.1` for this
+  release.
 
 ### Fixed
 

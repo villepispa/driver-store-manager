@@ -17,7 +17,7 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
-## Resolved issues (Unreleased — DSM-040)
+## Resolved issues (2026-09-05 — 0.9.0 — DSM-040)
 
 | ID | Summary | Evidence |
 |----|---------|----------|
@@ -233,6 +233,7 @@ rebuilt `dist/intune/*.ps1`.
 ## Activity
 
 <!-- ISSUES-ACTIVITY+ -->
+- **2026-09-05 22:28:00** — Cut **0.9.0** (`DSM-040` `-SettingsPath` overlay). Status remains Resolved (named plan accept still open).
 - **2026-09-05 17:04:47** — Implemented `DSM-040`: opt-in `-SettingsPath` overlay; `DSM-PESTER-OK passed=93`; `DSM-LINT-OK findings=0 files=30`. Plan todos `completion_claimed`.
 - **2026-09-05 13:06:17** — Filed `DSM-040` (high, in progress): opt-in `-SettingsPath` run profile; CLI overlays JSON; plan `plans/2026-09-05_dsm-040-opt-in-settings-path_c4d91a7e.plan.md`. Awaiting plan approval before implementation.
 - **2026-08-31 17:00:00** — Resolved `DSM-038`: wrap single-row CSV parse in `@()` so PS 5.1 StrictMode `.Count` does not throw (`Pester (powershell)` CI).

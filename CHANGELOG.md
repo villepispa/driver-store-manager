@@ -7,7 +7,18 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.8.1**._
+_Nothing queued — latest release: **0.8.2**._
+
+## [0.8.2] — 2026-09-05
+
+### Changed
+
+- **DSM-039:** Pester suites moved to `tests/unit/` to match sibling
+  product `hash-mass-downloader`. Runner default is the `unit` folder so
+  helpers, fixtures, and `_drafts` are not discovered. PCB
+  `2026-09-05_tests-unit-layout`.
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.8.2` for this
+  release.
 
 ## [0.8.1] — 2026-09-01
 

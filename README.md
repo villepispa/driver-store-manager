@@ -52,10 +52,10 @@ Remove-DsmUnusedDriverPackages -PreserveRulesPath .\examples\preserve-rules.exam
 ## Testing
 
 ```powershell
-# Unit + integration (PowerShell 7+; Pester 6 recommended)
+# Unit tests under tests/unit (PowerShell 7+; Pester 6 recommended)
 .\tests\Invoke-DsmPester.ps1
 # Or directly (Pester 6 configuration object):
-# $c = New-PesterConfiguration; $c.Run.Path = '.\tests'; Invoke-Pester -Configuration $c
+# $c = New-PesterConfiguration; $c.Run.Path = '.\tests\unit'; Invoke-Pester -Configuration $c
 
 # Windows PowerShell 5.1 smoke (no live pnputil) — build Intune bundles first
 .\scripts\Build-DsmIntuneScripts.ps1

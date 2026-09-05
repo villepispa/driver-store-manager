@@ -1,11 +1,11 @@
 BeforeAll {
-    . (Join-Path $PSScriptRoot 'helpers\DsmTestFixtures.ps1')
+    . (Join-Path $PSScriptRoot '..\helpers\DsmTestFixtures.ps1')
 }
 
 Describe 'Remove-DsmUnusedDriverPackages elevation and delete mocks' {
     BeforeEach {
         Get-Module DriverStoreManager -ErrorAction SilentlyContinue | Remove-Module -Force
-        . (Join-Path $PSScriptRoot 'helpers\Import-DsmTestHarness.ps1') -MockPnPUtil
+        . (Join-Path $PSScriptRoot '..\helpers\Import-DsmTestHarness.ps1') -MockPnPUtil
     }
     It 'Throws when elevation is missing for delete mode' {
         function Test-DsmElevation { return $false }

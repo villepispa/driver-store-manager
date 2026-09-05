@@ -17,6 +17,26 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (2026-09-05 — 0.8.2 — DSM-039)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-039 | Align Pester layout with `hash-mass-downloader` (`tests/unit/`) | `DSM-PESTER-OK passed=83`; PCB `2026-09-05_tests-unit-layout` |
+
+### DSM-039 — Pester suites under `tests/unit/`
+
+- **Status:** Resolved
+- **Severity:** Low
+- **Area:** Tests / agent-ready layout
+- **Impact:** Suites sat next to helpers, fixtures, and `_drafts`; a raw
+  `Invoke-Pester -Path .\tests` could pick up drafts. Sibling products keep
+  suites in `tests/unit/` and the runner at `tests/Invoke-<Prefix>Pester.ps1`.
+- **Remediation:** Move `*.Tests.ps1` into `tests/unit/`; point runner default
+  at that folder; keep helpers and fixtures at `tests/helpers/` and
+  `tests/fixtures/`.
+- **Evidence:** `pwsh -NoProfile -File .\tests\Invoke-DsmPester.ps1 -AgentSummary` → `DSM-PESTER-OK passed=83` (2026-09-05).
+- **Resolution:** Layout + path updates 2026-09-05; PCB `2026-09-05_tests-unit-layout`.
+
 ## Resolved issues (2026-09-01 — 0.8.1 — DSM-036 / DSM-038)
 
 | ID | Summary | Evidence |

@@ -128,7 +128,7 @@ One-liners with `$_.Name`, `$( $c.Count )`, or nested quotes fail unpredictably 
 
 ### 3.4 Test harness vs `Import-Module`
 
-Dot-source `tests/helpers/Import-DsmTestHarness.ps1` in **`BeforeAll`** (not at file top). Pester 6 discovers and runs each `*.Tests.ps1` in isolation — top-level dot-sourcing no longer runs before test execution. Shared package builders live in `tests/helpers/DsmTestFixtures.ps1`.
+Pester suites live under `tests/unit/` (runner: `tests/Invoke-DsmPester.ps1`). Dot-source `tests/helpers/Import-DsmTestHarness.ps1` in **`BeforeAll`** (not at file top). Pester 6 discovers and runs each `*.Tests.ps1` in isolation — top-level dot-sourcing no longer runs before test execution. Shared package builders live in `tests/helpers/DsmTestFixtures.ps1`. Golden `pnputil` CSV lives in `tests/fixtures/`.
 
 Use **`Should-Be`** / **`Should -Not -Throw`** (dashed operators). Bare `Should Be` fails on Pester 6 with a parameter-set error.
 

@@ -8,7 +8,7 @@
   no network).
 
   Ordered stages: Gallery dep check → Intune bundle build → PS 5.1 smoke
-  (via powershell.exe) → Pester (tests/) → ScriptAnalyzer. Prefer this
+  (via powershell.exe) → Pester (tests/unit) → ScriptAnalyzer. Prefer this
   entry for agents and CI discovery. Does not Install-Module (no network);
   prints the Install-Module pair when Pester or PSScriptAnalyzer is missing.
 

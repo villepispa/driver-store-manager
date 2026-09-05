@@ -1,17 +1,18 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Runs Driver Store Manager Pester suites with Pester 5.5+ or 6.x.
+  Runs Driver Store Manager Pester suites under tests/unit.
 
 .DESCRIPTION
   **Safety tier: 1** (executes unit tests; no production Driver Store mutations).
 
   Uses the Pester configuration object (v5/v6). Pester 6 discovers and runs each test file
   in isolation; harness setup lives in per-file BeforeAll blocks.
-  Exit code follows Pester (-Exit).
+  Exit code follows Pester (-Exit). Default path is tests/unit so helpers,
+  fixtures, and _drafts are not discovered.
 
 .PARAMETER TestPath
-  One or more *.Tests.ps1 paths. Default: core DriverStoreManager test files under tests/.
+  One or more *.Tests.ps1 paths or directories. Default: tests/unit.
 
 .PARAMETER AgentSummary
   Write exactly one line to the success stream so agents can use a single
@@ -36,12 +37,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string[]] $TestPath = @(
-        (Join-Path $PSScriptRoot 'DriverStoreManager.Tests.ps1')
-        (Join-Path $PSScriptRoot 'DriverStoreManager.MockedPnPUtil.Tests.ps1')
-        (Join-Path $PSScriptRoot 'DriverStoreManager.CleanupMocks.Tests.ps1')
-        (Join-Path $PSScriptRoot 'Build-DsmIntuneScripts.Tests.ps1')
-    ),
+    [string[]] $TestPath = @((Join-Path $PSScriptRoot 'unit')),
 
     [switch] $AgentSummary
 )

@@ -1,5 +1,5 @@
 BeforeAll {
-    $script:ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+    $script:ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
     $script:BuildScript = Join-Path $script:ProjectRoot 'scripts\Build-DsmIntuneScripts.ps1'
 
     function Invoke-DsmIntuneBuildUnderTest {

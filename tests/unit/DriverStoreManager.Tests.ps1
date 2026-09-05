@@ -1,7 +1,7 @@
 BeforeAll {
     Get-Module DriverStoreManager -ErrorAction SilentlyContinue | Remove-Module -Force
-    . (Join-Path $PSScriptRoot 'helpers\Import-DsmTestHarness.ps1')
-    . (Join-Path $PSScriptRoot 'helpers\DsmTestFixtures.ps1')
+    . (Join-Path $PSScriptRoot '..\helpers\Import-DsmTestHarness.ps1')
+    . (Join-Path $PSScriptRoot '..\helpers\DsmTestFixtures.ps1')
 }
 
 Describe 'Dsm.Runtime' {

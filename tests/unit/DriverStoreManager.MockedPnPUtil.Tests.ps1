@@ -1,6 +1,6 @@
 BeforeAll {
     Get-Module DriverStoreManager -ErrorAction SilentlyContinue | Remove-Module -Force
-    . (Join-Path $PSScriptRoot 'helpers\Import-DsmTestHarness.ps1') -MockPnPUtil
+    . (Join-Path $PSScriptRoot '..\helpers\Import-DsmTestHarness.ps1') -MockPnPUtil
 }
 
 Describe 'Mocked pnputil end-to-end pipeline' {
@@ -38,15 +38,15 @@ Describe 'Mocked pnputil end-to-end pipeline' {
         $fixtureRoot = Join-Path $TestDrive 'mock-fixtures'
         $driversFixture = Join-Path $fixtureRoot 'pnputil-enum-drivers.csv'
         New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
-        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures\pnputil-enum-devices-all.csv') `
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\fixtures\pnputil-enum-devices-all.csv') `
             -Destination (Join-Path $fixtureRoot 'pnputil-enum-devices-all.csv')
-        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures\pnputil-enum-devices-connected.csv') `
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\fixtures\pnputil-enum-devices-connected.csv') `
             -Destination (Join-Path $fixtureRoot 'pnputil-enum-devices-connected.csv')
         Set-Content -LiteralPath $driversFixture -Value $neverCsv -Encoding ASCII
         $script:DsmMockPnPUtilCalls.Clear()
 
         Get-Module DriverStoreManager -ErrorAction SilentlyContinue | Remove-Module -Force
-        . (Join-Path $PSScriptRoot 'helpers\Import-DsmTestHarness.ps1') `
+        . (Join-Path $PSScriptRoot '..\helpers\Import-DsmTestHarness.ps1') `
             -MockPnPUtil -FixtureRoot $fixtureRoot
 
         $inventory = @(Get-DsmDriverStoreInventory)

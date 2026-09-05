@@ -7,7 +7,13 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.8.2**._
+### Added
+
+- **DSM-040:** Opt-in `-SettingsPath` JSON run profile on
+  `Get-DsmDriverStoreReport`, `Remove-DsmUnusedDriverPackages`, and
+  `Invoke-DsmDriverStoreAudit.ps1`. File fills unbound keys; bound CLI
+  replaces (arrays replace). `AllowDelete` / `Confirm` / `WhatIf` are
+  rejected in the file. Example: `examples/dsm.settings.example.json`.
 
 ## [0.8.2] — 2026-09-05
 

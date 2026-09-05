@@ -41,6 +41,15 @@
 .PARAMETER IncludeWindowsBuiltIn
   Include Windows built-in driver manifests in scoped metrics and optional exports.
 
+.PARAMETER SettingsPath
+  Optional run-profile JSON. Loaded only when this parameter is bound. File
+  values fill unbound keys; bound CLI parameters replace them. Arrays replace
+  (no union). AllowDelete/Confirm/WhatIf are not valid keys. Relative paths
+  inside the file resolve against the settings file directory.
+
+.PARAMETER ShowEffectiveSettings
+  Write each applied key and its source (default, settings, or cli).
+
 .PARAMETER AgentSummary
   Write exactly one line to the success stream so agents can use a single
   powershell/pwsh -NoProfile -File invocation (no Shell compound with
@@ -57,6 +66,10 @@
 
 .EXAMPLE
   pwsh -NoProfile -File .\scripts\Invoke-DsmDriverStoreAudit.ps1 -OutputPath .\audit-output -AgentSummary
+
+.EXAMPLE
+  pwsh -NoProfile -File .\scripts\Invoke-DsmDriverStoreAudit.ps1 `
+    -SettingsPath .\examples\dsm.settings.example.json -ShowEffectiveSettings -AgentSummary
 
 .NOTES
   Dual-host (PS 5.1 floor). Delegates to DriverStoreManager module cmdlets.
@@ -86,6 +99,10 @@ param(
 
     [switch] $IncludeWindowsBuiltIn,
 
+    [string] $SettingsPath,
+
+    [switch] $ShowEffectiveSettings,
+
     [switch] $AgentSummary
 )
 
@@ -95,6 +112,13 @@ $ErrorActionPreference = 'Stop'
 try {
     $moduleRoot = Join-Path $PSScriptRoot '..\src\DriverStoreManager\DriverStoreManager.psd1'
     Import-Module $moduleRoot -Force
+
+    if ($PSBoundParameters.ContainsKey('SettingsPath')) {
+        $overlay = Get-DsmSettingsOverlay -BoundParameters $PSBoundParameters
+        foreach ($k in @($overlay.Assignments.Keys)) {
+            Set-Variable -Name $k -Value $overlay.Assignments[$k]
+        }
+    }
 
     New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
 
@@ -112,6 +136,9 @@ try {
     if ($SkipMicrosoftBlocklist) { $reportParams['SkipMicrosoftBlocklist'] = $true }
     if ($MicrosoftBlocklistMaxAgeDays -ne 7) {
         $reportParams['MicrosoftBlocklistMaxAgeDays'] = $MicrosoftBlocklistMaxAgeDays
+    }
+    if ($PSBoundParameters.ContainsKey('SettingsPath')) {
+        $reportParams['SettingsPath'] = $SettingsPath
     }
 
     if ($IncludeDism) {
@@ -138,6 +165,9 @@ try {
         }
         if ($PreserveRulesPath) { $cleanupParams['PreserveRulesPath'] = $PreserveRulesPath }
         if ($reportParams['Inventory']) { $cleanupParams['Inventory'] = $reportParams['Inventory'] }
+        if ($PSBoundParameters.ContainsKey('SettingsPath')) {
+            $cleanupParams['SettingsPath'] = $SettingsPath
+        }
 
         $preview = Remove-DsmUnusedDriverPackages @cleanupParams
         $previewPath = Join-Path $OutputPath "driver-store-cleanup-preview_$stamp.json"

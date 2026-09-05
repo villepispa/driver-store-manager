@@ -19,6 +19,8 @@
         'Join-DsmPath'
         'Get-DsmProgramDataRoot'
         'Export-DsmDriverDiskIdCatalog'
+        'Get-DsmSettings'
+        'Get-DsmSettingsOverlay'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()

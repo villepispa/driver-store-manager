@@ -19,9 +19,15 @@ function Remove-DsmUnusedDriverPackages {
     .PARAMETER MaxDeletes
         Cap the number of packages processed (0 = unlimited).
     .PARAMETER AllowDelete
-        Must be set with -Confirm:$false to perform deletion.
+        Must be set with -Confirm:$false to perform deletion. Never read from SettingsPath.
     .PARAMETER PassThru
         Return a single object with Results and Summary instead of streaming rows only.
+    .PARAMETER SettingsPath
+        Optional run-profile JSON. Loaded only when this parameter is bound.
+        File values fill unbound keys; bound CLI parameters replace them.
+        Arrays replace (no union). AllowDelete/Confirm/WhatIf are rejected in the file.
+    .PARAMETER ShowEffectiveSettings
+        Write each applied key and its source (default, settings, or cli).
     .EXAMPLE
         Remove-DsmUnusedDriverPackages -WhatIf
     .EXAMPLE
@@ -31,6 +37,8 @@ function Remove-DsmUnusedDriverPackages {
         Remove-DsmUnusedDriverPackages -Filter $f -WhatIf -PassThru
     .EXAMPLE
         Remove-DsmUnusedDriverPackages -AllowDelete -Confirm:$false -BackupRoot D:\dsm-backup
+    .EXAMPLE
+        Remove-DsmUnusedDriverPackages -SettingsPath .\examples\dsm.settings.example.json -WhatIf -PassThru
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
     param(
@@ -67,8 +75,14 @@ function Remove-DsmUnusedDriverPackages {
 
         [switch] $PassThru,
 
-        [int] $InventoryMaxAgeMinutes = 15
+        [int] $InventoryMaxAgeMinutes = 15,
+
+        [string] $SettingsPath,
+
+        [switch] $ShowEffectiveSettings
     )
+
+    $null = Set-DsmCallerSettingsOverlay -BoundParameters $PSBoundParameters
 
     $confirmExplicitlyDisabled = $PSBoundParameters.ContainsKey('Confirm') -and (
         $false -eq $PSBoundParameters['Confirm'])

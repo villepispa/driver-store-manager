@@ -27,3 +27,9 @@ tests/_drafts/
 
 # Cursor agent / PM workspace state (not part of the product publish surface)
 .cursor/
+
+# Proton Drive conflict copies (CFG-158 / TERV-030). Example:
+#   BACKLOG (# Edit conflict 2026-08-19 eqih1yC #).md
+# Matcher is the distinctive "Edit conflict" token so gitignore `#`
+# comments cannot truncate the pattern. Canonical file wins after a human check.
+**/*Edit conflict*

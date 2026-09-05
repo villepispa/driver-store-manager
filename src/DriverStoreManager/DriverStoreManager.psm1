@@ -5,6 +5,7 @@ $private = Join-Path $PSScriptRoot 'Private'
 
 $privateFiles = @(
     'Dsm.Runtime.ps1'
+    'Dsm.Settings.ps1'
     'Dsm.Common.ps1'
     'Dsm.Blocklist.ps1'
     'Dsm.Filter.ps1'
@@ -34,6 +35,8 @@ $runtimeHelpers = @(
     'Join-DsmPath'
     'Get-DsmProgramDataRoot'
     'Export-DsmDriverDiskIdCatalog'
+    'Get-DsmSettings'
+    'Get-DsmSettingsOverlay'
 )
 
 Export-ModuleMember -Function @($exportedPublic + $runtimeHelpers)

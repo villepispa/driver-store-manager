@@ -28,6 +28,12 @@ function Get-DsmDriverStoreReport {
         ProviderOriginalName (default) or HwId for old-version family logic.
     .PARAMETER OutputPath
         Optional directory to write JSON and Markdown report files.
+    .PARAMETER SettingsPath
+        Optional run-profile JSON. Loaded only when this parameter is bound.
+        File values fill unbound keys; bound CLI parameters replace them.
+        Arrays replace (no union). AllowDelete/Confirm/WhatIf are not valid keys.
+    .PARAMETER ShowEffectiveSettings
+        Write each applied key and its source (default, settings, or cli).
     .OUTPUTS
         PSCustomObject with Global, Scoped, FilterManifest, GeneratedAt.
     .EXAMPLE
@@ -35,6 +41,8 @@ function Get-DsmDriverStoreReport {
     .EXAMPLE
         $f = New-DsmDriverFilter -Provider 'Synaptics*'
         Get-DsmDriverStoreReport -Filter $f -PreserveRulesPath .\examples\preserve-rules.example.json
+    .EXAMPLE
+        Get-DsmDriverStoreReport -SettingsPath .\examples\dsm.settings.example.json -ShowEffectiveSettings
     #>
     [CmdletBinding()]
     param(
@@ -71,8 +79,14 @@ function Get-DsmDriverStoreReport {
         [ValidateSet('ProviderOriginalName', 'HwId')]
         [string] $FamilyGroupBy = 'ProviderOriginalName',
 
-        [string] $OutputPath
+        [string] $OutputPath,
+
+        [string] $SettingsPath,
+
+        [switch] $ShowEffectiveSettings
     )
+
+    $null = Set-DsmCallerSettingsOverlay -BoundParameters $PSBoundParameters
 
     if ($null -eq $Inventory) {
         $Inventory = @(Get-DsmDriverStoreInventory)

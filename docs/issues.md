@@ -17,6 +17,23 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (Unreleased — DSM-040)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-040 | Opt-in `-SettingsPath` run profile (CLI overlays JSON) | `DSM-PESTER-OK passed=93`; `DSM-LINT-OK findings=0 files=30` |
+
+### DSM-040 — Opt-in `-SettingsPath` run profile
+
+- **Status:** Resolved (plan YAML `completion_claimed`; named accept still open)
+- **Severity:** High
+- **Area:** CLI / operator UX
+- **Impact:** Repeat audit/cleanup runs need a long parameter list; there is no HMD-style JSON profile. Auto-loading a defaults file would be unsafe for deletion and Intune SYSTEM cwd.
+- **Remediation:** Load JSON **only** when `-SettingsPath` is bound. File fills unbound keys; bound CLI replaces (arrays replace, not union). `AllowDelete` / `-Confirm` / `-WhatIf` rejected in the file. Missing path fails closed. `-ShowEffectiveSettings` prints source per key.
+- **Plan:** [plans/2026-09-05_dsm-040-opt-in-settings-path_c4d91a7e.plan.md](../plans/2026-09-05_dsm-040-opt-in-settings-path_c4d91a7e.plan.md)
+- **Evidence:** `pwsh -NoProfile -File .\tests\Invoke-DsmPester.ps1 -AgentSummary` → `DSM-PESTER-OK passed=93` (2026-09-05). `DSM-LINT-OK findings=0 files=30`.
+- **Resolution:** Module loader `Dsm.Settings.ps1`; wired on report, remove, and `Invoke-DsmDriverStoreAudit.ps1`; example `examples/dsm.settings.example.json`.
+
 ## Resolved issues (2026-09-05 — 0.8.2 — DSM-039)
 
 | ID | Summary | Evidence |
@@ -216,6 +233,8 @@ rebuilt `dist/intune/*.ps1`.
 ## Activity
 
 <!-- ISSUES-ACTIVITY+ -->
+- **2026-09-05 17:04:47** — Implemented `DSM-040`: opt-in `-SettingsPath` overlay; `DSM-PESTER-OK passed=93`; `DSM-LINT-OK findings=0 files=30`. Plan todos `completion_claimed`.
+- **2026-09-05 13:06:17** — Filed `DSM-040` (high, in progress): opt-in `-SettingsPath` run profile; CLI overlays JSON; plan `plans/2026-09-05_dsm-040-opt-in-settings-path_c4d91a7e.plan.md`. Awaiting plan approval before implementation.
 - **2026-08-31 17:00:00** — Resolved `DSM-038`: wrap single-row CSV parse in `@()` so PS 5.1 StrictMode `.Count` does not throw (`Pester (powershell)` CI).
 - **2026-08-31 13:12:00** — Resolved `DSM-037`: parameterized Intune build (path vs inline config); `data/` → `examples/`; **82/82** Pester; `DSM-BUILD-OK`.
 - **2026-08-31 12:50:00** — Filed `DSM-037`: parameterized Intune build (path vs inline config) and `data/` → `examples/` rename.

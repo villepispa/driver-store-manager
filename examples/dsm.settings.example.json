@@ -1,0 +1,14 @@
+{
+  "DriverClass": [
+    "Printer"
+  ],
+  "Association": "NeverAssociated",
+  "PreserveRulesPath": "preserve-rules.example.json",
+  "BlocklistPath": "blocklist-hashes.example.txt",
+  "MaxDeletes": 10,
+  "MicrosoftBlocklistMaxAgeDays": 7,
+  "SkipMicrosoftBlocklist": false,
+  "IncludeWindowsBuiltIn": false,
+  "IncludeCleanupPreview": true,
+  "FamilyGroupBy": "ProviderOriginalName"
+}

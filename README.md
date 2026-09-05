@@ -43,6 +43,13 @@ Remove-DsmUnusedDriverPackages -PreserveRulesPath .\examples\preserve-rules.exam
 # Audit with cleanup preview JSON
 .\scripts\Invoke-DsmDriverStoreAudit.ps1 -OutputPath .\audit-output -IncludeCleanupPreview
 
+# Repeatable run profile (loaded only when -SettingsPath is passed)
+.\scripts\Invoke-DsmDriverStoreAudit.ps1 -SettingsPath .\examples\dsm.settings.example.json `
+    -ShowEffectiveSettings
+# Bound CLI keys replace the file (arrays replace, they do not union):
+.\scripts\Invoke-DsmDriverStoreAudit.ps1 -SettingsPath .\examples\dsm.settings.example.json `
+    -OutputPath .\audit-output
+
 # DiskId catalog (all OEM drivers — JSON + CSV)
 .\scripts\Export-DsmDriverDiskIdCatalog.ps1 -OutputPath .\audit-output
 # Or combined with audit:
@@ -193,6 +200,29 @@ detection JSON and backups policy. See [safety-gates.md](docs/safety-gates.md).
 | `Update-DsmMicrosoftDriverBlocklist` | 4 | Download/cache Microsoft vulnerable driver hashes |
 | `Test-DsmDriverVulnerabilities` | 4 | Blocklist (auto + supplemental), Authenticode, orphan |
 | `Remove-DsmUnusedDriverPackages` | 5 | Filter + preserve aware cleanup; export backup; `-PassThru` summary |
+| `Get-DsmSettings` / `Get-DsmSettingsOverlay` | — | Load opt-in JSON run profile; merge with bound CLI (DSM-040) |
+
+### Settings file overlay (DSM-040)
+
+A JSON run profile is used **only** when you pass `-SettingsPath`. Nothing is
+auto-loaded from the repo or the working directory (unlike Hash Mass
+Downloader’s `hmd.defaults.json`).
+
+| Layer | When | Role |
+|-------|------|------|
+| Cmdlet defaults | Always | Safe built-ins |
+| Settings JSON | `-SettingsPath` is bound and the file exists | Repeatable site/run profile |
+| Bound CLI | `$PSBoundParameters.ContainsKey` | This invocation wins |
+
+Unbound parameters take file values. Bound parameters replace them. Arrays
+**replace** (they are not unioned). Relative paths in the file resolve against
+the settings file’s directory. Missing, invalid, unknown, or forbidden keys
+(`AllowDelete`, `Confirm`, `WhatIf`, `Force`) throw. Deletion still requires
+explicit `-AllowDelete` and `-Confirm:$false`.
+
+Example file: [`examples/dsm.settings.example.json`](examples/dsm.settings.example.json)
+(copy it; do not point `-SettingsPath` at a file you have not reviewed).
+`-ShowEffectiveSettings` (or `-Verbose` after a load) prints `Key=value (source)`.
 
 ## Documentation
 

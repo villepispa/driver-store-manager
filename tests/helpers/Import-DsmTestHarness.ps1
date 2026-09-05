@@ -12,6 +12,7 @@ if (-not $FixtureRoot) {
 
 $privateOrder = @(
     'Dsm.Runtime.ps1'
+    'Dsm.Settings.ps1'
     'Dsm.Common.ps1'
     'Dsm.Blocklist.ps1'
     'Dsm.Filter.ps1'

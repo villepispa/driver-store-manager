@@ -17,6 +17,31 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (2026-10-12 — 0.9.1 — DSM-041, DSM-042)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-041 | Intune bundle omitted `Dsm.Settings.ps1` | `Build-DsmIntuneScripts.Tests.ps1` private-order + `Set-DsmCallerSettingsOverlay` in both scripts |
+| DSM-042 | Relative `-Inline*File` paths used the .NET process directory | Same suite: PowerShell location vs decoy `[Environment]::CurrentDirectory` |
+
+### DSM-041 — Settings loader missing from Intune bundles
+
+- **Status:** Resolved
+- **Severity:** High
+- **Area:** Intune / build
+- **Impact:** `Get-DsmDriverStoreReport` and `Remove-DsmUnusedDriverPackages` always call `Set-DsmCallerSettingsOverlay`. That function lives in `Private/Dsm.Settings.ps1`, which the module and the test harness load, but `scripts/intune/bundle-order.json` did not. A generated detect or remediate script throws `CommandNotFoundException` on the first report or cleanup call.
+- **Remediation:** Insert `Private/Dsm.Settings.ps1` immediately after `Private/Dsm.Runtime.ps1`. Pester compares bundle private order to `$privateFiles` in `DriverStoreManager.psm1`.
+- **Evidence:** `tests/unit/Build-DsmIntuneScripts.Tests.ps1` (7/7). Rebuild `DSM-BUILD-OK detectBytes=190557 remediateBytes=189764 sources=19 config=none`.
+
+### DSM-042 — Inline build paths resolved from the .NET process directory
+
+- **Status:** Resolved
+- **Severity:** Medium
+- **Area:** Intune / build
+- **Impact:** `-InlineBlocklistFile .\config\file.json` and `-InlinePreserveRulesFile .\config\file.json` were passed to `[System.IO.File]::ReadAllText`. `Set-Location` does not update `[Environment]::CurrentDirectory`, so the relative path was opened under the host start directory (often the user profile) even when `Test-Path` had already found the file in the PowerShell location.
+- **Remediation:** Resolve a non-rooted path with `Join-Path (Get-Location).ProviderPath` before `ReadAllText`. Path-only `-BlocklistPath` and `-PreserveRulesPath` are still copied verbatim; those strings are on-endpoint paths, not build-machine inputs.
+- **Evidence:** `tests/unit/Build-DsmIntuneScripts.Tests.ps1` sets the .NET current directory to a decoy folder and still inlines `.\config\…` from the PowerShell location.
+
 ## Resolved issues (2026-09-05 — 0.9.0 — DSM-040)
 
 | ID | Summary | Evidence |

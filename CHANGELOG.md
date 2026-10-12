@@ -7,7 +7,28 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.9.0**._
+_Nothing queued — latest release: **0.9.1**._
+
+## [0.9.1] — 2026-10-12
+
+### Fixed
+
+- **AI assistance log:** `docs/ai-assistance-log.md` renders as one GitHub table.
+  The `<!-- AAI+ -->` marker sits in the newest row's When cell. A comment on
+  its own line under the header made GitHub show only the header.
+- **DSM-041:** Intune bundles now include `Private/Dsm.Settings.ps1`, in the
+  same order as `DriverStoreManager.psm1`. Detection and remediation call
+  `Set-DsmCallerSettingsOverlay` on every report and cleanup; without that
+  file the generated scripts throw `CommandNotFoundException`.
+- **DSM-042:** `-InlineBlocklistFile` and `-InlinePreserveRulesFile` resolve
+  a relative path against the PowerShell current location. `ReadAllText`
+  previously used the .NET process directory, so `.\config\file.json` was
+  opened from the host start directory (often the user profile).
+
+### Changed
+
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.9.1` for this
+  release.
 
 ## [0.9.0] — 2026-09-05
 

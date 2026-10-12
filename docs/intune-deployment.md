@@ -35,12 +35,37 @@ per file):
     -InlineBlocklistFile .\examples\blocklist-hashes.example.txt
 ```
 
+A relative `-Inline*File` path is resolved against the **PowerShell current
+location** (where you ran the builder). It is not resolved against
+`$PSScriptRoot` or the .NET process directory. `-PreserveRulesPath` and
+`-BlocklistPath` are different: those strings are copied into the generated
+scripts and interpreted later on the endpoint, so pass absolute on-endpoint
+paths.
+
 Intune Detection and Remediation are **separate process launches**. Detection
 does **not** deliver config files for cleanup. Preserve rules belong in both
 scripts so `DeletableCandidateCount` matches Gate 6b deletion; each inline
 script writes `%ProgramData%\DriverStoreManager\config\inline\` itself.
 Blocklist hashes are Detection-only (Gate 7 — advisory scan;
 `Remove-DsmUnusedDriverPackages` has no `-BlocklistPath`).
+
+## Run profile is not an Intune input
+
+`Build-DsmIntuneScripts.ps1` does not read `dsm.settings.json`. This repo has
+no `config\dsm.settings.json`, and nothing is auto-loaded from the working
+directory.
+
+Detection calls `Get-DsmDriverStoreReport` and remediation calls
+`Remove-DsmUnusedDriverPackages` **without** `-SettingsPath`. The settings
+loader is in the bundle so those calls succeed; with no path bound, the file
+overlay is empty. Bake Intune policy with the parameters above.
+
+For an interactive audit, report, or cleanup, pass `-SettingsPath` yourself.
+The sample is [`examples/dsm.settings.example.json`](../examples/dsm.settings.example.json).
+Relative paths **inside** that JSON resolve against the settings file’s
+directory. The `-SettingsPath` argument itself resolves against the PowerShell
+current location. Deletion knobs (`AllowDelete`, `Confirm`, `WhatIf`) are
+rejected if they appear in the file.
 
 Outputs:
 

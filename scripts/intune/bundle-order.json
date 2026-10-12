@@ -3,6 +3,7 @@
   "moduleRootRelative": "src/DriverStoreManager",
   "sources": [
     "Private/Dsm.Runtime.ps1",
+    "Private/Dsm.Settings.ps1",
     "Private/Dsm.Common.ps1",
     "Private/Dsm.Blocklist.ps1",
     "Private/Dsm.Filter.ps1",

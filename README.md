@@ -138,6 +138,11 @@ Edit module source under `src/`; generate upload scripts — do **not** hand-edi
     -InlineBlocklistFile .\examples\blocklist-hashes.example.txt
 ```
 
+Relative `-Inline*File` paths are read from the PowerShell current location
+(the folder you ran the builder from). The builder does not load
+`dsm.settings.json`; Intune knobs are the parameters above. See
+[intune-deployment.md](docs/intune-deployment.md).
+
 Rebuild after any `src/` or `scripts/intune/templates/` change before upload.
 
 ### 2. Automated local gate (recommended before upload)

@@ -59,12 +59,14 @@
 .PARAMETER InlineBlocklistFile
   Local hash file whose content is inlined into Detection. At runtime the
   script writes it under ProgramData and sets `$DsmBlocklistPath`.
-  Mutually exclusive with -BlocklistPath.
+  A relative path is resolved against the PowerShell current location
+  (not the .NET process directory). Mutually exclusive with -BlocklistPath.
 
 .PARAMETER InlinePreserveRulesFile
   Local preserve-rules JSON whose content is inlined into Detection and
-  Remediation so cleanup uses the same rules. Mutually exclusive with
-  -PreserveRulesPath.
+  Remediation so cleanup uses the same rules. A relative path is resolved
+  against the PowerShell current location (not the .NET process directory).
+  Mutually exclusive with -PreserveRulesPath.
 
 .EXAMPLE
   pwsh -NoProfile -File .\scripts\Build-DsmIntuneScripts.ps1
@@ -183,17 +185,35 @@ function ConvertTo-DsmPsHereStringAssignment {
     return ('${0} = @''{1}{2}{1}''@' -f $Name, "`r`n", $body)
 }
 
+function Resolve-DsmPowerShellLiteralPath {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Path
+    )
+
+    # Set-Location updates the PowerShell location only. .NET file APIs
+    # resolve a relative path against [Environment]::CurrentDirectory, which
+    # stays at the host start directory (often the user profile).
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+
+    $base = (Get-Location).ProviderPath
+    return [System.IO.Path]::GetFullPath((Join-Path $base $Path))
+}
+
 function Get-DsmInlineFileText {
     param(
         [string] $LiteralPath,
         [string] $Kind
     )
 
-    if (-not (Test-Path -LiteralPath $LiteralPath)) {
-        throw ("Inline {0} file not found: {1}" -f $Kind, $LiteralPath)
+    $fullPath = Resolve-DsmPowerShellLiteralPath -Path $LiteralPath
+    if (-not (Test-Path -LiteralPath $fullPath)) {
+        throw ("Inline {0} file not found: {1}" -f $Kind, $fullPath)
     }
 
-    return [System.IO.File]::ReadAllText($LiteralPath)
+    return [System.IO.File]::ReadAllText($fullPath)
 }
 
 function Set-DsmBuildConfigRegion {

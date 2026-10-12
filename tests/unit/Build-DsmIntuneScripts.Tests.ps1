@@ -25,8 +25,26 @@ Describe 'Build-DsmIntuneScripts configuration' {
         $detect.Contains("`$DsmPreserveRulesPath = `$null") | Should-Be $true
         $detect.Contains("`$DsmInlineBlocklistContent = `$null") | Should-Be $true
         $detect.Contains("`$DsmInlinePreserveRulesContent = `$null") | Should-Be $true
+        $detect.Contains('function Set-DsmCallerSettingsOverlay') | Should-Be $true
+        $detect.Contains('#region DSM source: Private/Dsm.Settings.ps1') | Should-Be $true
         $remediate.Contains("`$DsmRemediationMaxDeletes = 10") | Should-Be $true
         $remediate.Contains("`$DsmPreserveRulesPath = `$null") | Should-Be $true
+        $remediate.Contains('function Set-DsmCallerSettingsOverlay') | Should-Be $true
+    }
+
+    It 'Private bundle order matches DriverStoreManager.psm1 privateFiles' {
+        $psm1Path = Join-Path $script:ProjectRoot 'src\DriverStoreManager\DriverStoreManager.psm1'
+        $psm1 = Get-Content -LiteralPath $psm1Path -Raw -Encoding UTF8
+        $match = [regex]::Match($psm1, '(?s)\$privateFiles = @\((.*?)\)')
+        $match.Success | Should-Be $true
+        $modulePrivate = @(
+            [regex]::Matches($match.Groups[1].Value, "'([^']+\.ps1)'") |
+                ForEach-Object { 'Private/' + $_.Groups[1].Value }
+        )
+        $manifestPath = Join-Path $script:ProjectRoot 'scripts\intune\bundle-order.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $bundlePrivate = @($manifest.sources | Where-Object { $_ -like 'Private/*' })
+        ($bundlePrivate -join '|') | Should-Be ($modulePrivate -join '|')
     }
 
     It 'Path mode bakes on-endpoint paths into detect and remediate' {
@@ -97,5 +115,40 @@ Describe 'Build-DsmIntuneScripts configuration' {
                 InlinePreserveRulesFile = $missing
             }
         } | Should -Throw '*Inline preserve-rules file not found*'
+    }
+
+    It 'Resolves relative inline paths against the PowerShell location' {
+        $caller = Join-Path $TestDrive 'caller'
+        $cfg = Join-Path $caller 'config'
+        New-Item -ItemType Directory -Path $cfg -Force | Out-Null
+        $hash = 'D' * 64
+        Set-Content -LiteralPath (Join-Path $cfg 'blocklist-hashes.txt') -Value $hash -Encoding utf8
+        $rules = '[{"Name":"Site printers","RuleType":"KeepMatching","Filter":{"DriverClass":["Printer"]}}]'
+        Set-Content -LiteralPath (Join-Path $cfg 'preserve-rules.json') -Value $rules -Encoding utf8
+
+        $decoy = Join-Path $TestDrive 'userprofile-decoy'
+        New-Item -ItemType Directory -Path $decoy -Force | Out-Null
+
+        $previousLocation = (Get-Location).ProviderPath
+        $previousDotNet = [System.IO.Directory]::GetCurrentDirectory()
+        try {
+            Set-Location -LiteralPath $caller
+            [System.IO.Directory]::SetCurrentDirectory($decoy)
+
+            $outDir = Invoke-DsmIntuneBuildUnderTest -BuildParameters @{
+                InlineBlocklistFile     = '.\config\blocklist-hashes.txt'
+                InlinePreserveRulesFile = '.\config\preserve-rules.json'
+            }
+            $detect = Get-Content -LiteralPath (Join-Path $outDir 'Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+            $remediate = Get-Content -LiteralPath (Join-Path $outDir 'Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+            $detect.Contains($hash) | Should-Be $true
+            $detect.Contains('Site printers') | Should-Be $true
+            $remediate.Contains('Site printers') | Should-Be $true
+            $remediate.Contains($hash) | Should-Be $false
+        }
+        finally {
+            Set-Location -LiteralPath $previousLocation
+            [System.IO.Directory]::SetCurrentDirectory($previousDotNet)
+        }
     }
 }

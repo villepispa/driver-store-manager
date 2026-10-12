@@ -7,7 +7,27 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.9.1**._
+_Nothing queued — latest release: **0.10.0**._
+
+## [0.10.0] — 2026-10-12
+
+### Added
+
+- **DSM-043:** `Build-DsmIntuneScripts.ps1 -SettingsFile` bakes the same
+  run-profile filters and knobs as interactive `-SettingsPath` (including
+  `DriverClass`). Detection compliance uses the scoped summary, so a baked
+  filter changes the exit code. Sibling `PreserveRulesPath` and
+  `BlocklistPath` files are inlined at build time. Bound builder parameters
+  replace file values.
+- **Excluded from Intune:** `IncludeWindowsBuiltIn` (`true` fails the build;
+  `false` is ignored), deletion arming (`AllowDelete`, `Confirm`, `WhatIf`,
+  `Force`), and `OutputPath` / `BackupRoot` (reports and backups stay under
+  ProgramData).
+
+### Changed
+
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.10.0` for this
+  release.
 
 ## [0.9.1] — 2026-10-12
 

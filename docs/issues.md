@@ -17,6 +17,21 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (2026-10-12 — 0.10.0 — DSM-043)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-043 | Intune builder ignored run-profile filters such as `DriverClass` | `Build-DsmIntuneScripts.Tests.ps1` settings-file, override, exclusion, and example-profile cases |
+
+### DSM-043 — Intune builder did not bake interactive run-profile keys
+
+- **Status:** Resolved
+- **Severity:** Medium
+- **Area:** Intune / build
+- **Impact:** `examples/dsm.settings.example.json` (and any `-SettingsPath` profile) had no path into generated Detection and Remediation. `DriverClass` and the other filters never changed the Intune exit code, because detection counted `Global.Summary` and the builder had no parameter for those keys.
+- **Remediation:** `-SettingsFile` bakes the safe keys. Bound builder parameters replace file values. Sibling preserve and blocklist paths are inlined. Detection uses `Scoped.Summary`. Excluded: `IncludeWindowsBuiltIn` (`true` fails the build; `false` is ignored), deletion arming (`AllowDelete`, `Confirm`, `WhatIf`, `Force`), and `OutputPath` / `BackupRoot`.
+- **Evidence:** `tests/unit/Build-DsmIntuneScripts.Tests.ps1` (14/14). Rebuild `DSM-BUILD-OK detectBytes=194202 remediateBytes=190592 sources=19 config=none`.
+
 ## Resolved issues (2026-10-12 — 0.9.1 — DSM-041, DSM-042)
 
 | ID | Summary | Evidence |

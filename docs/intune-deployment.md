@@ -49,23 +49,45 @@ script writes `%ProgramData%\DriverStoreManager\config\inline\` itself.
 Blocklist hashes are Detection-only (Gate 7 — advisory scan;
 `Remove-DsmUnusedDriverPackages` has no `-BlocklistPath`).
 
-## Run profile is not an Intune input
+## Run profile at build time
 
-`Build-DsmIntuneScripts.ps1` does not read `dsm.settings.json`. This repo has
-no `config\dsm.settings.json`, and nothing is auto-loaded from the working
-directory.
+Pass `-SettingsFile` to bake the same run-profile keys the interactive audit
+loads with `-SettingsPath`. A relative `-SettingsFile` path is resolved against
+the PowerShell current location. Bound builder parameters replace file values.
+Arrays replace; they are not unioned.
 
-Detection calls `Get-DsmDriverStoreReport` and remediation calls
-`Remove-DsmUnusedDriverPackages` **without** `-SettingsPath`. The settings
-loader is in the bundle so those calls succeed; with no path bound, the file
-overlay is empty. Bake Intune policy with the parameters above.
+```powershell
+.\scripts\Build-DsmIntuneScripts.ps1 -SettingsFile .\examples\dsm.settings.example.json
+```
 
-For an interactive audit, report, or cleanup, pass `-SettingsPath` yourself.
+Nothing is auto-loaded, and the generated scripts do **not** call
+`-SettingsPath` on the endpoint. `PreserveRulesPath` and `BlocklistPath` in
+the file are inlined when those files exist next to the JSON at build time
+(same as `-InlinePreserveRulesFile` / `-InlineBlocklistFile`). A path that
+does not exist on the build machine is rejected — use `-PreserveRulesPath` or
+`-BlocklistPath` for a file that exists only on the endpoint.
+
+Detection compliance uses the **scoped** summary. With no filter, scoped
+matches global. A baked `DriverClass` (or any other filter) changes the
+exit code to the same set remediation will consider. Deletion is still
+NeverAssociated orphans inside that filter.
+
 The sample is [`examples/dsm.settings.example.json`](../examples/dsm.settings.example.json).
 Relative paths **inside** that JSON resolve against the settings file’s
-directory. The `-SettingsPath` argument itself resolves against the PowerShell
-current location. Deletion knobs (`AllowDelete`, `Confirm`, `WhatIf`) are
-rejected if they appear in the file.
+directory. Interactive audit, report, and cleanup still use `-SettingsPath`
+on the cmdlet or `Invoke-DsmDriverStoreAudit.ps1`.
+
+### Excluded from Intune
+
+These keys are refused or ignored. They are not builder parameters.
+
+1. **`IncludeWindowsBuiltIn`** — `true` stops the build. Inbox driver manifests
+   stay out of scope. `false` (as in the sample) is ignored.
+2. **`AllowDelete`, `Confirm`, `WhatIf`, `Force`** — deletion arming stays
+   hardcoded in remediation (`-AllowDelete` and `-Confirm:$false`). The
+   settings loader rejects these keys in any JSON file.
+3. **`OutputPath` and `BackupRoot`** — reports and export-before-delete stay
+   under `%ProgramData%\DriverStoreManager`. A path in the file stops the build.
 
 Outputs:
 

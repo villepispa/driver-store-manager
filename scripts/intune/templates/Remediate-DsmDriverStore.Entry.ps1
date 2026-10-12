@@ -6,6 +6,11 @@ $DsmRemediationMaxDeletes = 10
 $DsmRemediationRequireElevation = $true
 $DsmPreserveRulesPath = $null
 $DsmInlinePreserveRulesContent = $null
+$DsmFilter = @{}
+$DsmIncludePublishedName = $null
+$DsmInventoryMaxAgeMinutes = $null
+$DsmIncludeDism = $null
+$DsmShowEffectiveSettings = $null
 # endregion DSM_BUILD_CONFIG
 
 if ($DsmInlinePreserveRulesContent) {
@@ -42,6 +47,23 @@ try {
     }
     if ($DsmPreserveRulesPath -and (Test-Path -LiteralPath $DsmPreserveRulesPath)) {
         $cleanupParams['PreserveRulesPath'] = $DsmPreserveRulesPath
+    }
+    foreach ($dsmKey in @($DsmFilter.Keys)) {
+        $cleanupParams[$dsmKey] = $DsmFilter[$dsmKey]
+    }
+    if ($DsmIncludePublishedName) {
+        $cleanupParams['IncludePublishedName'] = $DsmIncludePublishedName
+    }
+    if ($null -ne $DsmInventoryMaxAgeMinutes) {
+        $cleanupParams['InventoryMaxAgeMinutes'] = $DsmInventoryMaxAgeMinutes
+    }
+    if ($DsmIncludeDism) {
+        $cleanupParams['Inventory'] = @(Get-DsmDriverStoreInventory -IncludeDism)
+    }
+    if ($DsmShowEffectiveSettings) {
+        foreach ($dsmKey in @($DsmFilter.Keys)) {
+            Write-Host ('{0}={1} (intune)' -f $dsmKey, (@($DsmFilter[$dsmKey]) -join ','))
+        }
     }
 
     $run = Remove-DsmUnusedDriverPackages @cleanupParams

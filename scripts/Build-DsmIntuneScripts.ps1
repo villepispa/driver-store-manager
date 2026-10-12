@@ -68,6 +68,82 @@
   against the PowerShell current location (not the .NET process directory).
   Mutually exclusive with -PreserveRulesPath.
 
+.PARAMETER SettingsFile
+  Run-profile JSON (same shape as examples/dsm.settings.example.json). Safe
+  keys are baked into the generated scripts. A relative path is resolved
+  against the PowerShell current location. Bound builder parameters replace
+  file values. PreserveRulesPath and BlocklistPath in the file are inlined
+  when that file exists at build time.
+
+.PARAMETER Provider
+  Baked filter. Same as Get-DsmDriverStoreReport -Provider.
+
+.PARAMETER DeviceName
+  Baked filter.
+
+.PARAMETER DriverVersion
+  Baked filter.
+
+.PARAMETER MinDriverVersion
+  Baked filter. Version string.
+
+.PARAMETER MaxDriverVersion
+  Baked filter. Version string.
+
+.PARAMETER DriverClass
+  Baked filter. Detection compliance uses the scoped summary, so this limits
+  which orphans trigger remediation. Remediation deletes only matching classes.
+
+.PARAMETER ClassGuid
+  Baked filter.
+
+.PARAMETER HardwareId
+  Baked filter.
+
+.PARAMETER PublishedName
+  Baked filter.
+
+.PARAMETER OriginalName
+  Baked filter.
+
+.PARAMETER Association
+  Baked filter. Any, Connected, DisconnectedInstalled, NeverAssociated,
+  InUseOnly, or UnusedOnly. Deletion is still NeverAssociated orphans inside
+  that filter.
+
+.PARAMETER FamilyGroupBy
+  ProviderOriginalName or HwId. Detection report only.
+
+.PARAMETER IncludePublishedName
+  Baked cleanup allow-list of oem#.inf names. Remediation only.
+
+.PARAMETER MicrosoftBlocklistMaxAgeDays
+  Baked into Detection. Omit to keep the cmdlet default of 7.
+
+.PARAMETER InventoryMaxAgeMinutes
+  Baked into Remediation. Omit to keep the cmdlet default of 15.
+
+.PARAMETER IncludeCleanupPreview
+  When true, Detection also writes a WhatIf cleanup preview JSON.
+
+.PARAMETER ExportDiskIdCatalog
+  When true, Detection also writes the DiskId catalog JSON and CSV.
+
+.PARAMETER IncludeDism
+  When true, inventory is collected with DISM as well as pnputil.
+
+.PARAMETER ShowEffectiveSettings
+  When true, the generated scripts write the baked filter keys to the host.
+
+.PARAMETER UseMicrosoftBlocklist
+  Baked into Detection when this parameter is passed.
+
+.PARAMETER VulnerableIncludesSignature
+  Baked into Detection when this parameter is passed.
+
+.PARAMETER IncludeVulnerabilityScan
+  Baked into Detection when this parameter is passed. Default remains on.
+
 .EXAMPLE
   pwsh -NoProfile -File .\scripts\Build-DsmIntuneScripts.ps1
 
@@ -83,6 +159,10 @@
   pwsh -NoProfile -File .\scripts\Build-DsmIntuneScripts.ps1 `
     -InlinePreserveRulesFile .\examples\preserve-rules.example.json `
     -InlineBlocklistFile .\examples\blocklist-hashes.example.txt
+
+.EXAMPLE
+  pwsh -NoProfile -File .\scripts\Build-DsmIntuneScripts.ps1 `
+    -SettingsFile .\examples\dsm.settings.example.json
 
 .NOTES
   Rebuild after any Private/ change. Entry templates: scripts/intune/templates/*.Entry.ps1.
@@ -119,7 +199,53 @@ param(
 
     [string] $InlineBlocklistFile,
 
-    [string] $InlinePreserveRulesFile
+    [string] $InlinePreserveRulesFile,
+
+    [string] $SettingsFile,
+
+    [string[]] $Provider,
+
+    [string[]] $DeviceName,
+
+    [string[]] $DriverVersion,
+
+    [string] $MinDriverVersion,
+
+    [string] $MaxDriverVersion,
+
+    [string[]] $DriverClass,
+
+    [string[]] $ClassGuid,
+
+    [string[]] $HardwareId,
+
+    [string[]] $PublishedName,
+
+    [string[]] $OriginalName,
+
+    [string] $Association,
+
+    [string] $FamilyGroupBy,
+
+    [string[]] $IncludePublishedName,
+
+    [int] $MicrosoftBlocklistMaxAgeDays,
+
+    [int] $InventoryMaxAgeMinutes,
+
+    [bool] $IncludeCleanupPreview,
+
+    [bool] $ExportDiskIdCatalog,
+
+    [bool] $IncludeDism,
+
+    [bool] $ShowEffectiveSettings,
+
+    [bool] $UseMicrosoftBlocklist,
+
+    [bool] $VulnerableIncludesSignature,
+
+    [bool] $IncludeVulnerabilityScan
 )
 
 Set-StrictMode -Version Latest
@@ -216,6 +342,62 @@ function Get-DsmInlineFileText {
     return [System.IO.File]::ReadAllText($fullPath)
 }
 
+function ConvertTo-DsmPsValueLiteral {
+    param(
+        $Value,
+        [string] $Kind
+    )
+
+    if ($Kind -eq 'array') {
+        $parts = @()
+        foreach ($item in @($Value)) {
+            $parts += ConvertTo-DsmPsSingleQuotedLiteral -Value ([string]$item)
+        }
+        if ($parts.Count -eq 0) {
+            return '$null'
+        }
+        return ('@({0})' -f ($parts -join ', '))
+    }
+
+    if ($Kind -eq 'version') {
+        return ('[version]{0}' -f (ConvertTo-DsmPsSingleQuotedLiteral -Value ([string]$Value)))
+    }
+
+    if ($Kind -eq 'int') {
+        return ([string][int]$Value)
+    }
+
+    if ($Kind -eq 'bool') {
+        return (ConvertTo-DsmPsBoolLiteral -Value ([bool]$Value))
+    }
+
+    if ($null -eq $Value -or [string]::IsNullOrEmpty([string]$Value)) {
+        return '$null'
+    }
+
+    return (ConvertTo-DsmPsSingleQuotedLiteral -Value ([string]$Value))
+}
+
+function ConvertTo-DsmPsOptionalBoolLiteral {
+    param($Value)
+
+    if ($null -eq $Value -or ($Value -is [string] -and [string]::IsNullOrEmpty([string]$Value))) {
+        return '$null'
+    }
+
+    return (ConvertTo-DsmPsBoolLiteral -Value ([bool]$Value))
+}
+
+function ConvertTo-DsmPsFilterAssignment {
+    param([string[]] $Lines)
+
+    if (@($Lines).Count -eq 0) {
+        return '$DsmFilter = @{}'
+    }
+
+    return ('$DsmFilter = @{{{0}{1}{0}}}' -f "`r`n", ($Lines -join "`r`n"))
+}
+
 function Set-DsmBuildConfigRegion {
     param(
         [string] $Template,
@@ -295,6 +477,61 @@ Set-StrictMode -Version Latest
     return $outPath
 }
 
+$fromFile = $null
+if ($SettingsFile) {
+    $settingsImpl = Join-Path $projectRoot 'src\DriverStoreManager\Private\Dsm.Settings.ps1'
+    . $settingsImpl
+    $settingsFull = Resolve-DsmPowerShellLiteralPath -Path $SettingsFile
+    $fromFile = Import-DsmSettingsFile -LiteralPath $settingsFull
+
+    if ($fromFile.Contains('IncludeWindowsBuiltIn')) {
+        if ($fromFile['IncludeWindowsBuiltIn']) {
+            throw @'
+IncludeWindowsBuiltIn cannot be enabled for Intune. Inbox driver manifests stay out of the cleanup scope. Omit the key, or set it to false.
+'@
+        }
+        $fromFile.Remove('IncludeWindowsBuiltIn')
+    }
+
+    foreach ($blockedRoot in @('OutputPath', 'BackupRoot')) {
+        if ($fromFile.Contains($blockedRoot)) {
+            throw ($blockedRoot + ' is excluded from Intune builds. Reports and export-before-delete stay under %ProgramData%\DriverStoreManager.')
+        }
+    }
+
+    if (-not $PSBoundParameters.ContainsKey('PreserveRulesPath') -and
+        -not $PSBoundParameters.ContainsKey('InlinePreserveRulesFile') -and
+        $fromFile.Contains('PreserveRulesPath')) {
+        $resolvedPreserve = [string]$fromFile['PreserveRulesPath']
+        if (-not (Test-Path -LiteralPath $resolvedPreserve)) {
+            throw "Settings PreserveRulesPath was not found at build time: $resolvedPreserve. Pass -PreserveRulesPath for a path that exists only on the endpoint."
+        }
+        $InlinePreserveRulesFile = $resolvedPreserve
+    }
+
+    if (-not $PSBoundParameters.ContainsKey('BlocklistPath') -and
+        -not $PSBoundParameters.ContainsKey('InlineBlocklistFile') -and
+        $fromFile.Contains('BlocklistPath')) {
+        $resolvedBlocklist = [string]$fromFile['BlocklistPath']
+        if (-not (Test-Path -LiteralPath $resolvedBlocklist)) {
+            throw "Settings BlocklistPath was not found at build time: $resolvedBlocklist. Pass -BlocklistPath for a path that exists only on the endpoint."
+        }
+        $InlineBlocklistFile = $resolvedBlocklist
+    }
+
+    if (-not $PSBoundParameters.ContainsKey('RemediationMaxDeletes') -and $fromFile.Contains('MaxDeletes')) {
+        $RemediationMaxDeletes = [int]$fromFile['MaxDeletes']
+    }
+
+    if (-not $PSBoundParameters.ContainsKey('SkipMicrosoftBlocklist') -and $fromFile.Contains('SkipMicrosoftBlocklist')) {
+        $SkipMicrosoftBlocklist = [bool]$fromFile['SkipMicrosoftBlocklist']
+    }
+
+    if (-not $PSBoundParameters.ContainsKey('ForceBlocklistUpdate') -and $fromFile.Contains('UpdateMicrosoftBlocklist')) {
+        $ForceBlocklistUpdate = [bool]$fromFile['UpdateMicrosoftBlocklist']
+    }
+}
+
 $inlineBlocklistText = $null
 if ($InlineBlocklistFile) {
     $inlineBlocklistText = Get-DsmInlineFileText -LiteralPath $InlineBlocklistFile -Kind 'blocklist'
@@ -317,6 +554,115 @@ if ($BlocklistPath) { $bakedBlocklistPath = $BlocklistPath }
 $bakedPreservePath = $null
 if ($PreserveRulesPath) { $bakedPreservePath = $PreserveRulesPath }
 
+$filterKind = @{
+    Provider         = 'array'
+    DeviceName       = 'array'
+    DriverVersion    = 'array'
+    MinDriverVersion = 'version'
+    MaxDriverVersion = 'version'
+    DriverClass      = 'array'
+    ClassGuid        = 'array'
+    HardwareId       = 'array'
+    PublishedName    = 'array'
+    OriginalName     = 'array'
+    Association      = 'association'
+}
+$associationAllowed = @(
+    'Any', 'Connected', 'DisconnectedInstalled', 'NeverAssociated', 'InUseOnly', 'UnusedOnly'
+)
+$familyAllowed = @('ProviderOriginalName', 'HwId')
+$filterLines = @()
+foreach ($filterName in @($filterKind.Keys)) {
+    $filterValue = $null
+    $filterSet = $false
+    if ($PSBoundParameters.ContainsKey($filterName)) {
+        $filterValue = Get-Variable -Name $filterName -ValueOnly
+        $filterSet = $true
+    }
+    elseif ($null -ne $fromFile -and $fromFile.Contains($filterName)) {
+        $filterValue = $fromFile[$filterName]
+        $filterSet = $true
+    }
+
+    if (-not $filterSet -or $null -eq $filterValue) {
+        continue
+    }
+
+    $kindName = [string]$filterKind[$filterName]
+    if ($kindName -eq 'association') {
+        $associationText = [string]$filterValue
+        if ($associationAllowed -notcontains $associationText) {
+            throw "Association value '$associationText' is not valid."
+        }
+        $filterLines += ('    {0} = {1}' -f $filterName, (ConvertTo-DsmPsValueLiteral -Value $associationText -Kind 'string'))
+        continue
+    }
+
+    if ($kindName -eq 'array' -and @($filterValue).Count -eq 0) {
+        continue
+    }
+
+    $filterLines += ('    {0} = {1}' -f $filterName, (ConvertTo-DsmPsValueLiteral -Value $filterValue -Kind $kindName))
+}
+
+function Get-DsmIntuneOptional {
+    param(
+        [System.Collections.IDictionary] $Bound,
+        $Loaded,
+        [string] $Name,
+        [string] $FileName
+    )
+
+    if ($Bound.ContainsKey($Name)) {
+        return Get-Variable -Name $Name -Scope 1 -ValueOnly
+    }
+
+    if ($null -ne $Loaded -and $Loaded.Contains($FileName)) {
+        return $Loaded[$FileName]
+    }
+
+    return $null
+}
+
+$familyValue = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'FamilyGroupBy' -FileName 'FamilyGroupBy'
+if ($null -ne $familyValue -and $familyAllowed -notcontains [string]$familyValue) {
+    throw "FamilyGroupBy value '$familyValue' is not valid."
+}
+
+$publishedAllow = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'IncludePublishedName' -FileName 'IncludePublishedName'
+$inventoryMaxAge = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'InventoryMaxAgeMinutes' -FileName 'InventoryMaxAgeMinutes'
+$blocklistMaxAge = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'MicrosoftBlocklistMaxAgeDays' -FileName 'MicrosoftBlocklistMaxAgeDays'
+$cleanupPreview = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'IncludeCleanupPreview' -FileName 'IncludeCleanupPreview'
+$diskCatalog = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'ExportDiskIdCatalog' -FileName 'ExportDiskIdCatalog'
+$includeDismValue = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'IncludeDism' -FileName 'IncludeDism'
+$showSettings = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'ShowEffectiveSettings' -FileName 'ShowEffectiveSettings'
+$useMsBlocklist = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'UseMicrosoftBlocklist' -FileName 'UseMicrosoftBlocklist'
+$vulnSignature = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'VulnerableIncludesSignature' -FileName 'VulnerableIncludesSignature'
+$includeVuln = Get-DsmIntuneOptional -Bound $PSBoundParameters -Loaded $fromFile -Name 'IncludeVulnerabilityScan' -FileName 'IncludeVulnerabilityScan'
+
+$publishedLiteral = '$null'
+if ($null -ne $publishedAllow) {
+    $publishedLiteral = ConvertTo-DsmPsValueLiteral -Value $publishedAllow -Kind 'array'
+}
+
+$inventoryAgeLiteral = '$null'
+if ($null -ne $inventoryMaxAge) {
+    $inventoryAgeLiteral = ConvertTo-DsmPsValueLiteral -Value $inventoryMaxAge -Kind 'int'
+}
+
+$blocklistAgeLiteral = '$null'
+if ($null -ne $blocklistMaxAge) {
+    $blocklistAgeLiteral = ConvertTo-DsmPsValueLiteral -Value $blocklistMaxAge -Kind 'int'
+}
+
+$sharedProfile = @(
+    (ConvertTo-DsmPsFilterAssignment -Lines $filterLines)
+    ('$DsmIncludePublishedName = {0}' -f $publishedLiteral)
+    ('$DsmInventoryMaxAgeMinutes = {0}' -f $inventoryAgeLiteral)
+    ('$DsmIncludeDism = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $includeDismValue))
+    ('$DsmShowEffectiveSettings = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $showSettings))
+)
+
 $detectConfig = @(
     ('$DsmDetectBlocklisted = {0}' -f (ConvertTo-DsmPsBoolLiteral -Value $DetectBlocklisted))
     ('$DsmDetectSignatureIssues = {0}' -f (ConvertTo-DsmPsBoolLiteral -Value $DetectSignatureIssues))
@@ -328,14 +674,23 @@ $detectConfig = @(
     ('$DsmPreserveRulesPath = {0}' -f (ConvertTo-DsmPsSingleQuotedLiteral -Value $bakedPreservePath))
     (ConvertTo-DsmPsHereStringAssignment -Name 'DsmInlineBlocklistContent' -Value $inlineBlocklistText)
     (ConvertTo-DsmPsHereStringAssignment -Name 'DsmInlinePreserveRulesContent' -Value $inlinePreserveText)
-) -join "`r`n"
+    ('$DsmFamilyGroupBy = {0}' -f (ConvertTo-DsmPsValueLiteral -Value $familyValue -Kind 'string'))
+    ('$DsmMicrosoftBlocklistMaxAgeDays = {0}' -f $blocklistAgeLiteral)
+    ('$DsmIncludeCleanupPreview = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $cleanupPreview))
+    ('$DsmExportDiskIdCatalog = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $diskCatalog))
+    ('$DsmUseMicrosoftBlocklist = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $useMsBlocklist))
+    ('$DsmVulnerableIncludesSignature = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $vulnSignature))
+    ('$DsmIncludeVulnerabilityScan = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $includeVuln))
+) + $sharedProfile
+$detectConfig = $detectConfig -join "`r`n"
 
 $remediateConfig = @(
     ('$DsmRemediationMaxDeletes = {0}' -f $RemediationMaxDeletes)
     ('$DsmRemediationRequireElevation = {0}' -f (ConvertTo-DsmPsBoolLiteral -Value $RemediationRequireElevation))
     ('$DsmPreserveRulesPath = {0}' -f (ConvertTo-DsmPsSingleQuotedLiteral -Value $bakedPreservePath))
     (ConvertTo-DsmPsHereStringAssignment -Name 'DsmInlinePreserveRulesContent' -Value $inlinePreserveText)
-) -join "`r`n"
+) + $sharedProfile
+$remediateConfig = $remediateConfig -join "`r`n"
 
 $bundleBody = Get-DsmBundledSource -RelativePaths @($manifest.sources)
 
@@ -365,7 +720,10 @@ if ($remediateSize -gt $intuneScriptSizeLimitBytes) {
 }
 
 $configLabel = 'none'
-if ($InlineBlocklistFile -or $InlinePreserveRulesFile) {
+if ($SettingsFile) {
+    $configLabel = 'settings'
+}
+elseif ($InlineBlocklistFile -or $InlinePreserveRulesFile) {
     $configLabel = 'inline'
 }
 elseif ($BlocklistPath -or $PreserveRulesPath) {

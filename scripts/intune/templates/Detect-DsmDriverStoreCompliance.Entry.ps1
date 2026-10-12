@@ -12,6 +12,18 @@ $DsmBlocklistPath = $null
 $DsmPreserveRulesPath = $null
 $DsmInlineBlocklistContent = $null
 $DsmInlinePreserveRulesContent = $null
+$DsmFamilyGroupBy = $null
+$DsmMicrosoftBlocklistMaxAgeDays = $null
+$DsmIncludeCleanupPreview = $null
+$DsmExportDiskIdCatalog = $null
+$DsmUseMicrosoftBlocklist = $null
+$DsmVulnerableIncludesSignature = $null
+$DsmIncludeVulnerabilityScan = $null
+$DsmFilter = @{}
+$DsmIncludePublishedName = $null
+$DsmInventoryMaxAgeMinutes = $null
+$DsmIncludeDism = $null
+$DsmShowEffectiveSettings = $null
 # endregion DSM_BUILD_CONFIG
 
 if ($DsmInlineBlocklistContent) {
@@ -38,8 +50,28 @@ if (-not (Test-Path -LiteralPath $DsmReportRoot)) {
 }
 
 try {
-    $reportParams = @{
-        IncludeVulnerabilityScan = $true
+    $reportParams = @{}
+    if ($null -eq $DsmIncludeVulnerabilityScan -or $DsmIncludeVulnerabilityScan) {
+        $reportParams['IncludeVulnerabilityScan'] = $true
+    }
+    else {
+        $reportParams['IncludeVulnerabilityScan'] = $false
+    }
+    foreach ($dsmKey in @($DsmFilter.Keys)) {
+        $reportParams[$dsmKey] = $DsmFilter[$dsmKey]
+    }
+    if ($DsmFamilyGroupBy) { $reportParams['FamilyGroupBy'] = $DsmFamilyGroupBy }
+    if ($null -ne $DsmMicrosoftBlocklistMaxAgeDays) {
+        $reportParams['MicrosoftBlocklistMaxAgeDays'] = $DsmMicrosoftBlocklistMaxAgeDays
+    }
+    if ($null -ne $DsmUseMicrosoftBlocklist) {
+        $reportParams['UseMicrosoftBlocklist'] = [bool]$DsmUseMicrosoftBlocklist
+    }
+    if ($null -ne $DsmVulnerableIncludesSignature) {
+        $reportParams['VulnerableIncludesSignature'] = [bool]$DsmVulnerableIncludesSignature
+    }
+    if ($DsmIncludeDism) {
+        $reportParams['Inventory'] = @(Get-DsmDriverStoreInventory -IncludeDism)
     }
     if ($DsmBlocklistPath -and (Test-Path -LiteralPath $DsmBlocklistPath)) {
         $reportParams['BlocklistPath'] = $DsmBlocklistPath
@@ -49,9 +81,55 @@ try {
     if ($DsmPreserveRulesPath -and (Test-Path -LiteralPath $DsmPreserveRulesPath)) {
         $reportParams['PreserveRulesPath'] = $DsmPreserveRulesPath
     }
+    if ($DsmShowEffectiveSettings) {
+        foreach ($dsmKey in @($DsmFilter.Keys)) {
+            Write-Host ('{0}={1} (intune)' -f $dsmKey, (@($DsmFilter[$dsmKey]) -join ','))
+        }
+    }
 
     $report = Get-DsmDriverStoreReport @reportParams -OutputPath $DsmReportRoot
-    $summary = $report.Global.Summary
+    # Scoped equals Global when no filter is baked. A baked filter (DriverClass, and so on)
+    # must drive the compliance gate or remediation would delete a narrower set than detection counted.
+    $summary = $report.Scoped.Summary
+
+    if ($DsmIncludeCleanupPreview) {
+        $previewParams = @{
+            WhatIf   = $true
+            PassThru = $true
+        }
+        foreach ($dsmKey in @($DsmFilter.Keys)) {
+            $previewParams[$dsmKey] = $DsmFilter[$dsmKey]
+        }
+        if ($DsmPreserveRulesPath -and (Test-Path -LiteralPath $DsmPreserveRulesPath)) {
+            $previewParams['PreserveRulesPath'] = $DsmPreserveRulesPath
+        }
+        if ($DsmIncludePublishedName) {
+            $previewParams['IncludePublishedName'] = $DsmIncludePublishedName
+        }
+        if ($null -ne $DsmInventoryMaxAgeMinutes) {
+            $previewParams['InventoryMaxAgeMinutes'] = $DsmInventoryMaxAgeMinutes
+        }
+        if ($DsmIncludeDism -and $reportParams.ContainsKey('Inventory')) {
+            $previewParams['Inventory'] = $reportParams['Inventory']
+        }
+        $preview = Remove-DsmUnusedDriverPackages @previewParams
+        $previewStamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
+        $previewPath = Join-DsmPath $DsmReportRoot "cleanup-preview_$previewStamp.json"
+        Set-DsmContentUtf8 -LiteralPath $previewPath -Value ($preview | ConvertTo-Json -Depth 6)
+    }
+
+    if ($DsmExportDiskIdCatalog) {
+        $catalogParams = @{}
+        if ($DsmIncludeDism -and $reportParams.ContainsKey('Inventory')) {
+            $catalogParams['Inventory'] = $reportParams['Inventory']
+        }
+        $catalog = @(Export-DsmDriverDiskIdCatalog @catalogParams)
+        $catalogStamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
+        $catalogJson = Join-DsmPath $DsmReportRoot "diskid-catalog_$catalogStamp.json"
+        $catalogCsv = Join-DsmPath $DsmReportRoot "diskid-catalog_$catalogStamp.csv"
+        Set-DsmContentUtf8 -LiteralPath $catalogJson -Value ($catalog | ConvertTo-Json -Depth 4)
+        $catalog | Export-Csv -LiteralPath $catalogCsv -NoTypeInformation -Encoding UTF8
+    }
 
     # Gate 7: vulnerability signals are advisory — only orphan cleanup triggers remediation.
     $cleanupRequired = $false

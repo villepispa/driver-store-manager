@@ -25,6 +25,9 @@ Describe 'Build-DsmIntuneScripts configuration' {
         $detect.Contains("`$DsmPreserveRulesPath = `$null") | Should-Be $true
         $detect.Contains("`$DsmInlineBlocklistContent = `$null") | Should-Be $true
         $detect.Contains("`$DsmInlinePreserveRulesContent = `$null") | Should-Be $true
+        $detect.Contains("`$DsmFilter = @{}") | Should-Be $true
+        $detect.Contains("`$DsmIncludeCleanupPreview = `$null") | Should-Be $true
+        $detect.Contains('$summary = $report.Scoped.Summary') | Should-Be $true
         $detect.Contains('function Set-DsmCallerSettingsOverlay') | Should-Be $true
         $detect.Contains('#region DSM source: Private/Dsm.Settings.ps1') | Should-Be $true
         $remediate.Contains("`$DsmRemediationMaxDeletes = 10") | Should-Be $true
@@ -150,5 +153,134 @@ Describe 'Build-DsmIntuneScripts configuration' {
             Set-Location -LiteralPath $previousLocation
             [System.IO.Directory]::SetCurrentDirectory($previousDotNet)
         }
+    }
+
+    It 'Bakes safe settings-file keys and inlines sibling preserve and blocklist files' {
+        $root = Join-Path $TestDrive 'profile'
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        $hash = 'E' * 64
+        Set-Content -LiteralPath (Join-Path $root 'blocklist-hashes.txt') -Value $hash -Encoding utf8
+        $rules = '[{"Name":"Site printers","RuleType":"KeepMatching","Filter":{"DriverClass":["Printer"]}}]'
+        Set-Content -LiteralPath (Join-Path $root 'preserve-rules.json') -Value $rules -Encoding utf8
+        @'
+{
+  "DriverClass": ["Printer"],
+  "Association": "NeverAssociated",
+  "PreserveRulesPath": "preserve-rules.json",
+  "BlocklistPath": "blocklist-hashes.txt",
+  "MaxDeletes": 4,
+  "MicrosoftBlocklistMaxAgeDays": 3,
+  "IncludeWindowsBuiltIn": false,
+  "IncludeCleanupPreview": true,
+  "FamilyGroupBy": "HwId"
+}
+'@ | Set-Content -LiteralPath (Join-Path $root 'dsm.settings.json') -Encoding utf8
+
+        $outDir = Invoke-DsmIntuneBuildUnderTest -BuildParameters @{
+            SettingsFile = (Join-Path $root 'dsm.settings.json')
+        }
+        $detect = Get-Content -LiteralPath (Join-Path $outDir 'Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $remediate = Get-Content -LiteralPath (Join-Path $outDir 'Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+
+        $detect.Contains("DriverClass = @('Printer')") | Should-Be $true
+        $detect.Contains("Association = 'NeverAssociated'") | Should-Be $true
+        $detect.Contains("`$DsmFamilyGroupBy = 'HwId'") | Should-Be $true
+        $detect.Contains("`$DsmMicrosoftBlocklistMaxAgeDays = 3") | Should-Be $true
+        $detect.Contains("`$DsmIncludeCleanupPreview = `$true") | Should-Be $true
+        $detect.Contains($hash) | Should-Be $true
+        $detect.Contains('Site printers') | Should-Be $true
+        $config = [regex]::Match($detect, '(?s)# region DSM_BUILD_CONFIG\r?\n.*?# endregion DSM_BUILD_CONFIG').Value
+        $config.Contains('IncludeWindowsBuiltIn') | Should-Be $false
+        $remediate.Contains("DriverClass = @('Printer')") | Should-Be $true
+        $remediate.Contains("`$DsmRemediationMaxDeletes = 4") | Should-Be $true
+        $remediate.Contains('Site printers') | Should-Be $true
+        $remediate.Contains($hash) | Should-Be $false
+    }
+
+    It 'Bound builder parameters replace settings-file values' {
+        $root = Join-Path $TestDrive 'override'
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        '{"DriverClass":["Printer"],"MaxDeletes":4}' |
+            Set-Content -LiteralPath (Join-Path $root 'dsm.settings.json') -Encoding utf8
+
+        $outDir = Invoke-DsmIntuneBuildUnderTest -BuildParameters @{
+            SettingsFile          = (Join-Path $root 'dsm.settings.json')
+            DriverClass           = @('Display')
+            RemediationMaxDeletes = 2
+        }
+        $detect = Get-Content -LiteralPath (Join-Path $outDir 'Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $remediate = Get-Content -LiteralPath (Join-Path $outDir 'Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+
+        $detect.Contains("DriverClass = @('Display')") | Should-Be $true
+        $detect.Contains("DriverClass = @('Printer')") | Should-Be $false
+        $remediate.Contains("`$DsmRemediationMaxDeletes = 2") | Should-Be $true
+    }
+
+    It 'Resolves a relative settings file against the PowerShell location' {
+        $caller = Join-Path $TestDrive 'settings-caller'
+        New-Item -ItemType Directory -Path $caller -Force | Out-Null
+        '{"DriverClass":["Net"],"IncludeWindowsBuiltIn":false}' |
+            Set-Content -LiteralPath (Join-Path $caller 'dsm.settings.json') -Encoding utf8
+        $decoy = Join-Path $TestDrive 'settings-decoy'
+        New-Item -ItemType Directory -Path $decoy -Force | Out-Null
+
+        $previousLocation = (Get-Location).ProviderPath
+        $previousDotNet = [System.IO.Directory]::GetCurrentDirectory()
+        try {
+            Set-Location -LiteralPath $caller
+            [System.IO.Directory]::SetCurrentDirectory($decoy)
+            $outDir = Invoke-DsmIntuneBuildUnderTest -BuildParameters @{
+                SettingsFile = '.\dsm.settings.json'
+            }
+            $detect = Get-Content -LiteralPath (Join-Path $outDir 'Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+            $detect.Contains("DriverClass = @('Net')") | Should-Be $true
+        }
+        finally {
+            Set-Location -LiteralPath $previousLocation
+            [System.IO.Directory]::SetCurrentDirectory($previousDotNet)
+        }
+    }
+
+    It 'Rejects IncludeWindowsBuiltIn true' {
+        $path = Join-Path $TestDrive 'inbox-true.json'
+        '{"IncludeWindowsBuiltIn":true}' | Set-Content -LiteralPath $path -Encoding utf8
+        {
+            Invoke-DsmIntuneBuildUnderTest -BuildParameters @{ SettingsFile = $path }
+        } | Should -Throw '*IncludeWindowsBuiltIn cannot be enabled for Intune*'
+    }
+
+    It 'Rejects OutputPath in a settings file' {
+        $path = Join-Path $TestDrive 'output-path.json'
+        '{"OutputPath":"C:\\temp\\dsm-out"}' | Set-Content -LiteralPath $path -Encoding utf8
+        {
+            Invoke-DsmIntuneBuildUnderTest -BuildParameters @{ SettingsFile = $path }
+        } | Should -Throw '*OutputPath is excluded from Intune builds*'
+    }
+
+    It 'Rejects AllowDelete in a settings file' {
+        $path = Join-Path $TestDrive 'allow-delete.json'
+        '{"AllowDelete":true}' | Set-Content -LiteralPath $path -Encoding utf8
+        {
+            Invoke-DsmIntuneBuildUnderTest -BuildParameters @{ SettingsFile = $path }
+        } | Should -Throw '*AllowDelete*'
+    }
+
+    It 'Bakes the example run profile' {
+        $example = Join-Path $script:ProjectRoot 'examples\dsm.settings.example.json'
+        $outDir = Invoke-DsmIntuneBuildUnderTest -BuildParameters @{
+            SettingsFile = $example
+        }
+        $detect = Get-Content -LiteralPath (Join-Path $outDir 'Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $remediate = Get-Content -LiteralPath (Join-Path $outDir 'Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+
+        $detect.Contains("DriverClass = @('Printer')") | Should-Be $true
+        $detect.Contains("Association = 'NeverAssociated'") | Should-Be $true
+        $detect.Contains("`$DsmFamilyGroupBy = 'ProviderOriginalName'") | Should-Be $true
+        $detect.Contains("`$DsmIncludeCleanupPreview = `$true") | Should-Be $true
+        $detect.Contains('DisplayLink latest per family') | Should-Be $true
+        $detect.Contains('17927B93B2D6AB4271C158F039CAE2D60591D6A14458F5A5690AEC86F5D54229') | Should-Be $true
+        $remediate.Contains("DriverClass = @('Printer')") | Should-Be $true
+        $remediate.Contains('DisplayLink latest per family') | Should-Be $true
+        $remediate.Contains('17927B93B2D6AB4271C158F039CAE2D60591D6A14458F5A5690AEC86F5D54229') | Should-Be $false
     }
 }

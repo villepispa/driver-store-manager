@@ -138,10 +138,16 @@ Edit module source under `src/`; generate upload scripts — do **not** hand-edi
     -InlineBlocklistFile .\examples\blocklist-hashes.example.txt
 ```
 
-Relative `-Inline*File` paths are read from the PowerShell current location
-(the folder you ran the builder from). The builder does not load
-`dsm.settings.json`; Intune knobs are the parameters above. See
-[intune-deployment.md](docs/intune-deployment.md).
+Relative `-Inline*File` and `-SettingsFile` paths are read from the PowerShell
+current location (the folder you ran the builder from). `-SettingsFile` bakes
+the same run-profile keys as interactive `-SettingsPath`, except the exclusions
+in [intune-deployment.md](docs/intune-deployment.md) (`IncludeWindowsBuiltIn`,
+deletion arming, and output or backup paths). The generated scripts do not
+load a settings file on the endpoint.
+
+```powershell
+.\scripts\Build-DsmIntuneScripts.ps1 -SettingsFile .\examples\dsm.settings.example.json
+```
 
 Rebuild after any `src/` or `scripts/intune/templates/` change before upload.
 
@@ -228,6 +234,11 @@ explicit `-AllowDelete` and `-Confirm:$false`.
 Example file: [`examples/dsm.settings.example.json`](examples/dsm.settings.example.json)
 (copy it; do not point `-SettingsPath` at a file you have not reviewed).
 `-ShowEffectiveSettings` (or `-Verbose` after a load) prints `Key=value (source)`.
+
+Intune uses the same JSON at **build** time (`-SettingsFile` on
+`Build-DsmIntuneScripts.ps1`). The uploaded scripts do not read a settings
+file. `IncludeWindowsBuiltIn`, deletion arming, `OutputPath`, and `BackupRoot`
+are excluded — see [intune-deployment.md](docs/intune-deployment.md).
 
 ## Documentation
 

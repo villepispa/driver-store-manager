@@ -161,10 +161,17 @@ max `$DsmRemediationMaxDeletes` (default 10) per run. Does not use `pnputil /for
 
 ```text
 %ProgramData%\DriverStoreManager\
-  reports\intune-detection\detection-summary_*.json
+  reports\intune-detection\driver-store-report_*.json
+  reports\intune-detection\driver-store-report_*.md
+  reports\intune-detection\driver-store-filtered_*.csv
   reports\intune-remediation\remediation-summary_*.json
   backups\<timestamp>\<oem#.inf>\
 ```
+
+`driver-store-filtered_*.csv` is written only when a filter such as `DriverClass`
+is active. Detection also prints `DSM-FILTERED-DRIVERS count=N file=<path>`
+so the Intune log points at that CSV. The JSON report still contains the full
+inventory under `Global`.
 
 ## PowerShell version strategy
 

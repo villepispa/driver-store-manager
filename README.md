@@ -175,8 +175,10 @@ $LASTEXITCODE
 # 0 = compliant | 1 = non-compliant (orphan cleanup would remediate) | 2 = error
 ```
 
-Review the newest `detection-summary_*.json` under ProgramData before deciding
-whether remediation is appropriate.
+Review the newest `driver-store-report_*.json` under ProgramData before deciding
+whether remediation is appropriate. When a filter such as `DriverClass` is
+baked in, open `driver-store-filtered_*.csv` in that same folder for the
+matches only.
 
 ### 4. Remediation — do not casually run the bundle
 

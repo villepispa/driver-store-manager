@@ -7,7 +7,23 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.10.0**._
+_Nothing queued — latest release: **0.11.0**._
+
+## [0.11.0] — 2026-10-13
+
+### Added
+
+- **DSM-044:** When a filter such as `DriverClass` is active, `-OutputPath`
+  also writes `driver-store-filtered_<timestamp>.csv` with one row per match.
+  The Markdown report lists those packages under **Filtered drivers**. The
+  full JSON report is unchanged. Intune detection prints
+  `DSM-FILTERED-DRIVERS` with the CSV path. No file is written when no
+  filter is active.
+
+### Changed
+
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.11.0` for this
+  release.
 
 ## [0.10.0] — 2026-10-12
 

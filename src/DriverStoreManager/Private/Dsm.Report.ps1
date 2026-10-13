@@ -463,6 +463,125 @@ function Measure-DsmDriverStoreScope {
     }
 }
 
+function ConvertTo-DsmFilterCriteriaText {
+    <#
+    .SYNOPSIS
+        Renders active filter keys as a single criteria string.
+    #>
+    param(
+        [object] $Manifest
+    )
+
+    if ($null -eq $Manifest) { return '' }
+
+    $parts = [System.Collections.Generic.List[string]]::new()
+    $keys = if ($Manifest -is [System.Collections.IDictionary]) {
+        @($Manifest.Keys)
+    }
+    else {
+        @($Manifest.PSObject.Properties.Name)
+    }
+
+    foreach ($key in $keys) {
+        if ($key -eq 'IncludeWindowsBuiltIn') { continue }
+
+        $value = if ($Manifest -is [System.Collections.IDictionary]) {
+            $Manifest[$key]
+        }
+        else {
+            $Manifest.$key
+        }
+
+        if ($null -eq $value -or "$value" -eq '') { continue }
+        if ($key -eq 'Association' -and "$value" -eq 'Any') { continue }
+
+        $text = if ($value -is [System.Array]) {
+            (@($value) -join '|')
+        }
+        else {
+            "$value"
+        }
+        $parts.Add(('{0}={1}' -f $key, $text)) | Out-Null
+    }
+
+    return ($parts -join '; ')
+}
+
+function ConvertTo-DsmFilteredDriverCsvRow {
+    param(
+        [psobject] $Package,
+
+        [string] $FilterCriteria,
+
+        [bool] $IncludeSignatureInVulnerable = $true
+    )
+
+    $row = New-DsmDriverStoreListingRow -Package $Package `
+        -IncludeSignatureInVulnerable:$IncludeSignatureInVulnerable
+
+    return [pscustomobject]@{
+        FilterCriteria                   = $FilterCriteria
+        PublishedName                    = $row.PublishedName
+        OriginalName                     = $row.OriginalName
+        Provider                         = $row.Provider
+        DriverVersion                    = $row.DriverVersion
+        DriverClass                      = $row.DriverClass
+        DeviceAssociation                = $row.DeviceAssociation
+        ConnectedDeviceCount             = $row.ConnectedDeviceCount
+        DisconnectedInstalledDeviceCount = $row.DisconnectedInstalledDeviceCount
+        Preserved                        = $row.Preserved
+        AdvisorySeverity                 = $row.AdvisorySeverity
+        RiskSignals                      = (@($row.RiskSignals) -join ';')
+        IsOldVersion                     = $row.IsOldVersion
+        FamilyKey                        = $row.FamilyKey
+    }
+}
+
+function Export-DsmFilteredDriverListing {
+    <#
+    .SYNOPSIS
+        Writes one CSV row per package that matched the active filter.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string] $LiteralPath,
+
+        [AllowEmptyCollection()]
+        [psobject[]] $Packages,
+
+        [string] $FilterCriteria,
+
+        [bool] $IncludeSignatureInVulnerable = $true
+    )
+
+    $pkgs = @(
+        if ($null -eq $Packages) { @() }
+        else { $Packages | Where-Object { $null -ne $_ } }
+    )
+
+    $rows = @(foreach ($pkg in $pkgs) {
+            ConvertTo-DsmFilteredDriverCsvRow -Package $pkg `
+                -FilterCriteria $FilterCriteria `
+                -IncludeSignatureInVulnerable:$IncludeSignatureInVulnerable
+        })
+
+    if (@($rows).Count -gt 1) {
+        $rows = @($rows | Sort-Object DriverClass, PublishedName)
+    }
+
+    if (@($rows).Count -eq 0) {
+        $schema = ConvertTo-DsmFilteredDriverCsvRow -Package ([pscustomobject]@{}) `
+            -FilterCriteria '' `
+            -IncludeSignatureInVulnerable:$IncludeSignatureInVulnerable
+        $header = @($schema | ConvertTo-Csv -NoTypeInformation)[0]
+        Set-DsmContentUtf8 -LiteralPath $LiteralPath -Value ($header + "`r`n")
+        return
+    }
+
+    $lines = @($rows | ConvertTo-Csv -NoTypeInformation)
+    Set-DsmContentUtf8 -LiteralPath $LiteralPath -Value (($lines -join "`r`n") + "`r`n")
+}
+
 function ConvertTo-DsmDriverStoreReportMarkdown {
     param(
         [psobject] $Report
@@ -494,6 +613,22 @@ function ConvertTo-DsmDriverStoreReportMarkdown {
             }
             $lines.Add('') | Out-Null
         }
+    }
+
+    $filterCriteria = ConvertTo-DsmFilterCriteriaText -Manifest $Report.FilterManifest
+    if ($filterCriteria) {
+        $matched = @($Report.Scoped.Listings.ConnectedDrivers) + @($Report.Scoped.Listings.UnusedDrivers)
+        $lines.Add('## Filtered drivers') | Out-Null
+        $lines.Add('') | Out-Null
+        $lines.Add("Filter: $filterCriteria") | Out-Null
+        $lines.Add("Count: $(@($matched).Count)") | Out-Null
+        $lines.Add('') | Out-Null
+        $lines.Add('Matching packages are also written to `driver-store-filtered_<timestamp>.csv` in the report folder.') | Out-Null
+        $lines.Add('') | Out-Null
+        foreach ($row in @($matched | Sort-Object DriverClass, PublishedName)) {
+            $lines.Add("- ``$($row.PublishedName)`` $($row.DriverClass) ($($row.Provider)) $($row.DriverVersion) $($row.DeviceAssociation)") | Out-Null
+        }
+        $lines.Add('') | Out-Null
     }
 
     if ($Report.VulnerabilityManifest) {

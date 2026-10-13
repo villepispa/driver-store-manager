@@ -564,6 +564,55 @@ Describe 'Get-DsmDriverStoreReport' {
         $report.Global.Summary.BlocklistedInUseCount | Should-Be 1
         $report.Global.Listings.VulnerableDrivers[0].AdvisorySeverity | Should-Be 'Critical'
     }
+
+    It 'Writes a filtered CSV that lists only DriverClass matches' {
+        $inv = @(
+            (New-TestDsmPackage -PublishedName 'oem1.inf' -DriverClass 'Printer' -Provider 'Contoso')
+            (New-TestDsmPackage -PublishedName 'oem2.inf' -DriverClass 'Net' -Provider 'Fabrikam')
+            (New-TestDsmPackage -PublishedName 'oem3.inf' -DriverClass 'Printer' -Provider 'Wingtip')
+        )
+        $out = Join-Path $TestDrive 'filtered-reports'
+        $report = Get-DsmDriverStoreReport -Inventory $inv -DriverClass 'Printer' `
+            -OutputPath $out -SkipMicrosoftBlocklist
+
+        Test-Path -LiteralPath $report.OutputFiles.FilteredCsv | Should-Be $true
+        $csv = @(Import-Csv -LiteralPath $report.OutputFiles.FilteredCsv)
+        $csv.Count | Should-Be 2
+        @($csv | Where-Object { $_.DriverClass -ne 'Printer' }).Count | Should-Be 0
+        @($csv.PublishedName) -contains 'oem2.inf' | Should-Be $false
+        $csv[0].FilterCriteria | Should-Be 'DriverClass=Printer'
+        $csv[0].PublishedName | Should-Be 'oem1.inf'
+        $csv[1].PublishedName | Should-Be 'oem3.inf'
+
+        $md = Get-Content -LiteralPath $report.OutputFiles.Markdown -Raw
+        ($md -match '## Filtered drivers') | Should-Be $true
+        ($md -match 'oem1\.inf') | Should-Be $true
+        ($md -match 'oem2\.inf') | Should-Be $false
+    }
+
+    It 'Omits the filtered CSV when no filter is active' {
+        $out = Join-Path $TestDrive 'unfiltered-reports'
+        $report = Get-DsmDriverStoreReport -Inventory @(
+            (New-TestDsmPackage -PublishedName 'oem1.inf' -DriverClass 'Printer')
+        ) -OutputPath $out -SkipMicrosoftBlocklist
+
+        $null -eq $report.OutputFiles.FilteredCsv | Should-Be $true
+        @(Get-ChildItem -LiteralPath $out -Filter 'driver-store-filtered_*.csv').Count | Should-Be 0
+        $md = Get-Content -LiteralPath $report.OutputFiles.Markdown -Raw
+        ($md -match '## Filtered drivers') | Should-Be $false
+    }
+
+    It 'Writes a header-only filtered CSV when nothing matches' {
+        $out = Join-Path $TestDrive 'empty-filter-reports'
+        $report = Get-DsmDriverStoreReport -Inventory @(
+            (New-TestDsmPackage -PublishedName 'oem9.inf' -DriverClass 'Net')
+        ) -DriverClass 'Printer' -OutputPath $out -SkipMicrosoftBlocklist
+
+        $lines = @(Get-Content -LiteralPath $report.OutputFiles.FilteredCsv)
+        $lines.Count | Should-Be 1
+        ($lines[0] -match 'DriverClass') | Should-Be $true
+        ($lines[0] -match 'PublishedName') | Should-Be $true
+    }
 }
 
 Describe 'Get-DsmInfMetadata' {

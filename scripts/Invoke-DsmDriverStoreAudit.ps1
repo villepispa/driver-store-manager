@@ -152,6 +152,13 @@ try {
 
     Write-Host "Wrote: $($report.OutputFiles.Json)" -ForegroundColor Green
     Write-Host "Wrote: $($report.OutputFiles.Markdown)" -ForegroundColor Green
+    if ($report.OutputFiles.FilteredCsv) {
+        $filteredCount = 0
+        if ($null -ne $report.Scoped -and $null -ne $report.Scoped.Summary) {
+            $filteredCount = [int]$report.Scoped.Summary.TotalPackages
+        }
+        Write-Host "Wrote filtered drivers: $($report.OutputFiles.FilteredCsv) ($filteredCount packages)" -ForegroundColor Green
+    }
     Write-Host ($report.Global.Summary | Format-List | Out-String)
 
     $previewCandidates = 0

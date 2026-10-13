@@ -17,6 +17,21 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (2026-10-13 — 0.11.0 — DSM-044)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-044 | Filtered driver matches were buried in the full report | `DriverStoreManager.Tests.ps1` filtered CSV, omitted-file, and header-only cases |
+
+### DSM-044 — Filtered matches were buried in the full driver report
+
+- **Status:** Resolved
+- **Severity:** Low
+- **Area:** Reporting
+- **Impact:** `Get-DsmDriverStoreReport -OutputPath` wrote one JSON that lists every in-scope driver under `Global`, plus the filtered set under `Scoped`. With `DriverClass` (or any other filter) set, the matches were not a file you could open on their own. Intune detection did not point at them.
+- **Remediation:** An active filter also writes `driver-store-filtered_<timestamp>.csv` (header only when nothing matches). The Markdown report adds a **Filtered drivers** section. Intune detection writes `DSM-FILTERED-DRIVERS count=N file=<path>`. No extra file when the filter is empty.
+- **Evidence:** `DSM-PESTER-OK passed=105`. `DSM-LINT-OK findings=0 files=31`. `DSM-PS51-SMOKE-OK`. `DSM-BUILD-OK detectBytes=199881 remediateBytes=196039 sources=19 config=none`.
+
 ## Resolved issues (2026-10-12 — 0.10.0 — DSM-043)
 
 | ID | Summary | Evidence |

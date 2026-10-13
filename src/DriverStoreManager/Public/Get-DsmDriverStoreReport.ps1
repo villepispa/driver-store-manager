@@ -28,6 +28,8 @@ function Get-DsmDriverStoreReport {
         ProviderOriginalName (default) or HwId for old-version family logic.
     .PARAMETER OutputPath
         Optional directory to write JSON and Markdown report files.
+        When a filter is active (for example -DriverClass), also writes
+        driver-store-filtered_<timestamp>.csv with one row per match.
     .PARAMETER SettingsPath
         Optional run-profile JSON. Loaded only when this parameter is bound.
         File values fill unbound keys; bound CLI parameters replace them.
@@ -223,13 +225,22 @@ function Get-DsmDriverStoreReport {
         $stamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
         $jsonPath = Join-DsmPath $OutputPath "driver-store-report_$stamp.json"
         $mdPath = Join-DsmPath $OutputPath "driver-store-report_$stamp.md"
+        $filteredCsvPath = $null
+        if (-not (Test-DsmDriverFilterIsEmpty -Filter $Filter)) {
+            $filteredCsvPath = Join-DsmPath $OutputPath "driver-store-filtered_$stamp.csv"
+            Export-DsmFilteredDriverListing -LiteralPath $filteredCsvPath `
+                -Packages @($scopedPkgs) `
+                -FilterCriteria (ConvertTo-DsmFilterCriteriaText -Manifest $report.FilterManifest) `
+                -IncludeSignatureInVulnerable:$VulnerableIncludesSignature
+        }
 
         Set-DsmContentUtf8 -LiteralPath $jsonPath -Value ($report | ConvertTo-Json -Depth 8)
         Set-DsmContentUtf8 -LiteralPath $mdPath -Value (ConvertTo-DsmDriverStoreReportMarkdown -Report $report)
 
         $report | Add-Member -NotePropertyName OutputFiles -NotePropertyValue ([pscustomobject]@{
-                Json     = $jsonPath
-                Markdown = $mdPath
+                Json        = $jsonPath
+                Markdown    = $mdPath
+                FilteredCsv = $filteredCsvPath
             }) -Force
     }
 

@@ -88,6 +88,10 @@ try {
     }
 
     $report = Get-DsmDriverStoreReport @reportParams -OutputPath $DsmReportRoot
+    if ($report.OutputFiles -and $report.OutputFiles.FilteredCsv) {
+        Write-Host ("DSM-FILTERED-DRIVERS count={0} file={1}" -f `
+                $report.Scoped.Summary.TotalPackages, $report.OutputFiles.FilteredCsv)
+    }
     # Scoped equals Global when no filter is baked. A baked filter (DriverClass, and so on)
     # must drive the compliance gate or remediation would delete a narrower set than detection counted.
     $summary = $report.Scoped.Summary

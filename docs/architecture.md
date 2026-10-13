@@ -73,7 +73,10 @@ JSON rules: `examples/preserve-rules.example.json`. Independent of `InUse`.
 
 Dual emit: **Global** (OEM scope, no filter criteria) and **Scoped** (active filter). Each includes
 `Summary` (all plan metrics) and `Listings` (connected, unused, preserved, version ladders,
-vulnerable, deletable). Optional `-OutputPath` writes JSON + Markdown.
+vulnerable, deletable). Optional `-OutputPath` writes JSON + Markdown. When a filter is
+active, the same folder also gets `driver-store-filtered_<timestamp>.csv` — one row per
+match, so a `DriverClass` (or other) filter is a file of its own. The Markdown report
+lists those packages under **Filtered drivers**.
 
 `Invoke-DsmDriverStoreAudit.ps1` delegates to this cmdlet (single source of truth).
 

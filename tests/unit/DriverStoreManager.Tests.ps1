@@ -20,37 +20,36 @@ Describe 'Dsm.Runtime' {
         $file = Join-Path $child 'note.txt'
         New-Item -ItemType Directory -Path $child -Force | Out-Null
         Set-Content -LiteralPath $file -Value 'driver' -Encoding ascii
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = New-Object Security.Principal.WindowsPrincipal $identity
+        $elevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
         try {
             Set-DsmRestrictedDirectoryAcl -LiteralPath $root
-            $denied = $false
-            try {
-                Get-Content -LiteralPath $file -ErrorAction Stop | Out-Null
+            if ($elevated) {
+                $acl = Get-Acl -LiteralPath $root
+                $acl.AreAccessRulesProtected | Should-Be $true
+                $sids = @()
+                foreach ($rule in @($acl.Access)) {
+                    $sids += $rule.IdentityReference.Translate(
+                        [System.Security.Principal.SecurityIdentifier]).Value
+                }
+                ($sids -contains 'S-1-5-18') | Should-Be $true
+                ($sids -contains 'S-1-5-32-544') | Should-Be $true
+                @($sids).Count | Should-Be 2
             }
-            catch {
-                $denied = $true
+            else {
+                $denied = $false
+                try {
+                    Get-Content -LiteralPath $file -ErrorAction Stop | Out-Null
+                }
+                catch {
+                    $denied = $true
+                }
+                $denied | Should-Be $true
             }
-            $denied | Should-Be $true
         }
         finally {
-            $pending = New-Object System.Collections.Generic.Queue[string]
-            $pending.Enqueue($root)
-            while ($pending.Count -gt 0) {
-                $current = $pending.Dequeue()
-                $dirSecurity = New-Object System.Security.AccessControl.DirectorySecurity
-                $dirSecurity.SetAccessRuleProtection($false, $false)
-                $dirInfo = New-Object System.IO.DirectoryInfo $current
-                [System.IO.FileSystemAclExtensions]::SetAccessControl($dirInfo, $dirSecurity)
-                foreach ($entry in @(Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue)) {
-                    if ($entry.PSIsContainer) {
-                        $pending.Enqueue($entry.FullName)
-                    }
-                    else {
-                        $fileSecurity = New-Object System.Security.AccessControl.FileSecurity
-                        $fileSecurity.SetAccessRuleProtection($false, $false)
-                        [System.IO.FileSystemAclExtensions]::SetAccessControl($entry, $fileSecurity)
-                    }
-                }
-            }
+            Reset-DsmTestRestrictedAcl -LiteralPath $root
         }
     }
 }

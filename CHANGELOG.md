@@ -7,7 +7,17 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.14.0**._
+_Nothing queued — latest release: **0.14.1**._
+
+## [0.14.1] — 2026-10-14
+
+### Fixed
+
+- **ACL tests** — an elevated host checks the SYSTEM and Administrators
+  access entries. Windows PowerShell 5.1 restores the test folder with
+  `SetAccessControl`. PowerShell 7 keeps using `FileSystemAclExtensions`.
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.14.1` for this
+  release.
 
 ## [0.14.0] — 2026-10-14
 

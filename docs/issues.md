@@ -367,6 +367,7 @@ rebuilt `dist/intune/*.ps1`.
 ## Activity
 
 <!-- ISSUES-ACTIVITY+ -->
+- **2026-10-14 21:40:00** — Cut **0.14.1**: ACL tests pass on an elevated host and on Windows PowerShell 5.1.
 - **2026-10-14 21:24:00** — Cut **0.14.0** (`DSM-047`, `DSM-048`, `DSM-049`): class backup folders, retention, and ProgramData access.
 - **2026-10-14 16:52:39** — Resolved `DSM-049`: `%ProgramData%\DriverStoreManager` is limited to SYSTEM full control and Administrators modify, in the module, both Intune entries, and the MVP. `DSM-VALIDATE-OK` (Pester 120, lint 0/33, PS 5.1 smoke).
 - **2026-10-14 16:15:37** — Resolved `DSM-048`: backups are `backups\<Class>\<original.inf>_<oem#.inf>`, unknown names come from the exported INF, and folders older than `BackupRetentionDays` (default 30) are deleted. `DSM-VALIDATE-OK` (Pester 118, lint 0/33, PS 5.1 smoke).

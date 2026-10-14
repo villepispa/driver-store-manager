@@ -4,6 +4,7 @@ BeforeAll {
     $script:DetectScript = Join-Path $script:MvpDir 'Detect-DsmDriverStoreCompliance.ps1'
     $script:RemediateScript = Join-Path $script:MvpDir 'Remediate-DsmDriverStore.ps1'
     $script:FixtureSource = Join-Path $script:ProjectRoot 'tests\fixtures'
+    . (Join-Path $script:ProjectRoot 'tests\helpers\DsmTestFixtures.ps1')
 
     function New-MvpFixtureSet {
         param([string] $Root, [string[]] $ExtraDriverLines)
@@ -235,25 +236,7 @@ Describe 'Enterprise Intune MVP scripts' {
             $run.StdErr | Should -BeNullOrEmpty
         }
         finally {
-            $pending = New-Object System.Collections.Generic.Queue[string]
-            $pending.Enqueue($state)
-            while ($pending.Count -gt 0) {
-                $current = $pending.Dequeue()
-                $dirSecurity = New-Object System.Security.AccessControl.DirectorySecurity
-                $dirSecurity.SetAccessRuleProtection($false, $false)
-                $dirInfo = New-Object System.IO.DirectoryInfo $current
-                [System.IO.FileSystemAclExtensions]::SetAccessControl($dirInfo, $dirSecurity)
-                foreach ($entry in @(Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue)) {
-                    if ($entry.PSIsContainer) {
-                        $pending.Enqueue($entry.FullName)
-                    }
-                    else {
-                        $fileSecurity = New-Object System.Security.AccessControl.FileSecurity
-                        $fileSecurity.SetAccessRuleProtection($false, $false)
-                        [System.IO.FileSystemAclExtensions]::SetAccessControl($entry, $fileSecurity)
-                    }
-                }
-            }
+            Reset-DsmTestRestrictedAcl -LiteralPath $state
         }
     }
 }

@@ -42,3 +42,44 @@ function Set-DsmTestAsciiFile {
 
     [System.IO.File]::WriteAllText($LiteralPath, $Value, [System.Text.Encoding]::ASCII)
 }
+
+function Reset-DsmTestRestrictedAcl {
+    param(
+        [Parameter(Mandatory)]
+        [string] $LiteralPath
+    )
+
+    # Windows PowerShell 5.1 has DirectoryInfo.SetAccessControl.
+    # PowerShell 7 moved that method to FileSystemAclExtensions.
+    $useInstance = $null -ne [System.IO.DirectoryInfo].GetMethod('SetAccessControl')
+    $pending = New-Object System.Collections.Generic.Queue[string]
+    $pending.Enqueue($LiteralPath)
+    while ($pending.Count -gt 0) {
+        $current = $pending.Dequeue()
+        $dirSecurity = New-Object System.Security.AccessControl.DirectorySecurity
+        $dirSecurity.SetAccessRuleProtection($false, $false)
+        $dirInfo = New-Object System.IO.DirectoryInfo $current
+        if ($useInstance) {
+            $dirInfo.SetAccessControl($dirSecurity)
+        }
+        else {
+            [System.IO.FileSystemAclExtensions]::SetAccessControl($dirInfo, $dirSecurity)
+        }
+
+        foreach ($entry in @(Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue)) {
+            if ($entry.PSIsContainer) {
+                $pending.Enqueue($entry.FullName)
+            }
+            else {
+                $fileSecurity = New-Object System.Security.AccessControl.FileSecurity
+                $fileSecurity.SetAccessRuleProtection($false, $false)
+                if ($useInstance) {
+                    $entry.SetAccessControl($fileSecurity)
+                }
+                else {
+                    [System.IO.FileSystemAclExtensions]::SetAccessControl($entry, $fileSecurity)
+                }
+            }
+        }
+    }
+}

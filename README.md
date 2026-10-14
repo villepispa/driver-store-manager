@@ -150,10 +150,12 @@ load a settings file on the endpoint.
 ```
 
 Rebuild after any `src/` or `scripts/intune/templates/` change before upload.
-The same build copies the enterprise MVP scripts to `dist/intune/mvp/`.
-Those two files are the review bundle: orphan cleanup only, read top to bottom.
-Edit `#section Config` in `scripts/intune/mvp/`, then rebuild. Blocklist and DiskId
-stay in the full module. See [docs/intune-deployment.md](docs/intune-deployment.md).
+The same build writes the enterprise MVP scripts to `dist/intune/mvp/` and
+bakes the same switches and settings file for the orphan-cleanup features those
+scripts implement. Edit `#section Config` in `scripts/intune/mvp/` for the
+default, or pass `-SettingsFile` / the builder switches to override the built
+copies. Blocklist and DiskId stay in the full module. See
+[docs/intune-deployment.md](docs/intune-deployment.md).
 
 ### 2. Automated local gate (recommended before upload)
 

@@ -37,6 +37,19 @@ Describe 'Build-DsmIntuneScripts configuration' {
         Test-Path -LiteralPath (Join-Path $outDir 'mvp\Remediate-DsmDriverStore.ps1') | Should-Be $true
     }
 
+    It 'Report lists the MVP copies next to the full bundles' {
+        $outDir = Join-Path $TestDrive 'report'
+        $shown = & $script:BuildScript -OutputDirectory $outDir | Out-String
+        $shown.Contains('MvpDetectionScript') | Should-Be $true
+        $shown.Contains('MvpRemediationScript') | Should-Be $true
+        $shown.Contains('MvpDetectionLines') | Should-Be $true
+        $shown.Contains('MvpRemediationLines') | Should-Be $true
+        $shown.Contains('MvpDetectionBytes') | Should-Be $true
+        $shown.Contains('MvpRemediationBytes') | Should-Be $true
+        Test-Path -LiteralPath (Join-Path $outDir 'mvp\Detect-DsmDriverStoreCompliance.ps1') | Should-Be $true
+        Test-Path -LiteralPath (Join-Path $outDir 'mvp\Remediate-DsmDriverStore.ps1') | Should-Be $true
+    }
+
     It 'Private bundle order matches DriverStoreManager.psm1 privateFiles' {
         $psm1Path = Join-Path $script:ProjectRoot 'src\DriverStoreManager\DriverStoreManager.psm1'
         $psm1 = Get-Content -LiteralPath $psm1Path -Raw -Encoding UTF8
@@ -73,6 +86,14 @@ Describe 'Build-DsmIntuneScripts configuration' {
         $remediate.Contains("`$DsmPreserveRulesPath = 'C:\ProgramData\DriverStoreManager\config\preserve-rules.json'") | Should-Be $true
         $remediate.Contains("`$DsmRemediationMaxDeletes = 2") | Should-Be $true
         $remediate.Contains("`$DsmBlocklistPath =") | Should-Be $false
+        $mvpDetect = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $mvpRemediate = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+        $mvpDetect.Contains("`$MvpOrphanThreshold = 3") | Should-Be $true
+        $mvpDetect.Contains("`$MvpPreserveRulesPath = 'C:\ProgramData\DriverStoreManager\config\preserve-rules.json'") | Should-Be $true
+        $mvpDetect.Contains('O''Brien') | Should-Be $false
+        $mvpRemediate.Contains("`$MvpMaxDeletes = 2") | Should-Be $true
+        $mvpRemediate.Contains("`$MvpPreserveRulesPath = 'C:\ProgramData\DriverStoreManager\config\preserve-rules.json'") | Should-Be $true
+        $mvpRemediate.Contains('O''Brien') | Should-Be $false
     }
 
     It 'Inline mode embeds file content in generated scripts (blocklist Detection; preserve both)' {
@@ -284,5 +305,44 @@ Describe 'Build-DsmIntuneScripts configuration' {
         $remediate.Contains("DriverClass = @('Printer')") | Should-Be $true
         $remediate.Contains('DisplayLink latest per family') | Should-Be $true
         $remediate.Contains('17927B93B2D6AB4271C158F039CAE2D60591D6A14458F5A5690AEC86F5D54229') | Should-Be $false
+        $mvpDetect = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $mvpRemediate = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+        $mvpDetect.Contains("`$MvpFilterDriverClass = @('Printer')") | Should-Be $true
+        $mvpDetect.Contains("`$MvpFilterAssociation = 'NeverAssociated'") | Should-Be $true
+        $mvpDetect.Contains('DisplayLink latest per family') | Should-Be $true
+        $mvpDetect.Contains('17927B93B2D6AB4271C158F039CAE2D60591D6A14458F5A5690AEC86F5D54229') | Should-Be $false
+        $mvpRemediate.Contains("`$MvpFilterDriverClass = @('Printer')") | Should-Be $true
+        $mvpRemediate.Contains("`$MvpMaxDeletes = 10") | Should-Be $true
+        $mvpRemediate.Contains('17927B93B2D6AB4271C158F039CAE2D60591D6A14458F5A5690AEC86F5D54229') | Should-Be $false
+    }
+
+    It 'Bakes supported switches into the MVP and omits unsupported keys' {
+        $rules = Join-Path $TestDrive 'mvp-rules.json'
+        '[{"Name":"Site net","RuleType":"KeepMatching","Filter":{"DriverClass":["Net"]}}]' |
+            Set-Content -LiteralPath $rules -Encoding utf8
+        $outDir = Invoke-DsmIntuneBuildUnderTest -BuildParameters @{
+            OrphanThreshold             = 4
+            DetectOrphanCandidates      = $false
+            RemediationMaxDeletes       = 2
+            RemediationRequireElevation = $false
+            DriverClass                 = @('Net')
+            IncludePublishedName        = @('oem9.inf')
+            InlinePreserveRulesFile     = $rules
+            DeviceName                  = @('Contoso')
+            BlocklistPath               = 'C:\ProgramData\DriverStoreManager\config\blocklist-hashes.txt'
+        }
+        $mvpDetect = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $mvpRemediate = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+        $mvpDetect.Contains("`$MvpOrphanThreshold = 4") | Should-Be $true
+        $mvpDetect.Contains("`$MvpDetectOrphanCandidates = `$false") | Should-Be $true
+        $mvpDetect.Contains("`$MvpFilterDriverClass = @('Net')") | Should-Be $true
+        $mvpDetect.Contains("`$MvpIncludePublishedName = @('oem9.inf')") | Should-Be $true
+        $mvpDetect.Contains('Site net') | Should-Be $true
+        $mvpDetect.Contains('Contoso') | Should-Be $false
+        $mvpDetect.Contains('blocklist-hashes.txt') | Should-Be $false
+        $mvpRemediate.Contains("`$MvpMaxDeletes = 2") | Should-Be $true
+        $mvpRemediate.Contains("`$MvpRequireElevation = `$false") | Should-Be $true
+        $mvpRemediate.Contains('Site net') | Should-Be $true
+        $mvpRemediate.Contains('Contoso') | Should-Be $false
     }
 }

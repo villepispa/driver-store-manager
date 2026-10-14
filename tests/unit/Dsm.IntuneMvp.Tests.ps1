@@ -177,4 +177,38 @@ Describe 'Enterprise Intune MVP scripts' {
         $summary.DeletedCount | Should -Be 1
         $summary.ExportOrDeleteFailedCount | Should -Be 0
     }
+
+    It 'Loads preserve rules from an endpoint path and fails closed when that file is missing' {
+        $kept = Join-Path $TestDrive 'keep-system.json'
+        @(
+            '['
+            '  {"Name":"Keep system and printers","RuleType":"KeepMatching","Filter":{"DriverClass":["System","Printer"]}}'
+            ']'
+        ) | Set-Content -LiteralPath $kept -Encoding utf8
+        $scriptPath = Join-Path $TestDrive 'Detect-WithPath.ps1'
+        $text = [System.IO.File]::ReadAllText($script:DetectScript)
+        $quotedKept = $kept.Replace("'", "''")
+        $oldPathLine = '$MvpPreserveRulesPath = ' + "''"
+        $newPathLine = '$MvpPreserveRulesPath = ''' + $quotedKept + "'"
+        $text = $text.Replace($oldPathLine, $newPathLine)
+        [System.IO.File]::WriteAllText($scriptPath, $text)
+        $fixture = Join-Path $TestDrive 'path-rules'
+        $state = Join-Path $TestDrive 'path-rules-state'
+        New-MvpFixtureSet -Root $fixture -ExtraDriverLines @(
+            'oem8.inf,print.inf,Contoso,Printer,1.0.0.0,,print.sys'
+            'oem9.inf,orphan.inf,OrphanCo,System,1.0.0.0,,orphan.sys'
+        )
+        $run = Invoke-MvpChild -ScriptPath $scriptPath -FixtureRoot $fixture -StateRoot $state
+        $run.ExitCode | Should -Be 0
+
+        $missingPath = Join-Path $TestDrive 'missing-rules.json'
+        $missingScript = Join-Path $TestDrive 'Detect-MissingPath.ps1'
+        $missingText = [System.IO.File]::ReadAllText($script:DetectScript)
+        $quotedMissing = $missingPath.Replace("'", "''")
+        $missingText = $missingText.Replace($oldPathLine, ('$MvpPreserveRulesPath = ''' + $quotedMissing + "'"))
+        [System.IO.File]::WriteAllText($missingScript, $missingText)
+        $missingRun = Invoke-MvpChild -ScriptPath $missingScript -FixtureRoot $fixture -StateRoot (Join-Path $TestDrive 'missing-path-state')
+        $missingRun.ExitCode | Should -Be 2
+        $missingRun.StdErr | Should -Match 'Preserve rules file not found'
+    }
 }

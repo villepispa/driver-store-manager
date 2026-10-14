@@ -7,7 +7,20 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.12.0**._
+_Nothing queued — latest release: **0.13.0**._
+
+## [0.13.0] — 2026-10-14
+
+### Changed
+
+- **DSM-046:** The Intune build bakes the same switches and settings file into
+  `dist/intune/mvp/` for features the enterprise MVP implements: orphan
+  threshold, supported filters, preserve rules, max deletes, and elevation.
+  Blocklist, signature, DiskId, and the other full-bundle-only keys are left
+  out of that copy. The build report lists the MVP script paths, line counts,
+  and byte sizes next to the full bundles.
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.13.0` for this
+  release.
 
 ## [0.12.0] — 2026-10-14
 

@@ -238,16 +238,28 @@ All metrics come from `Get-DsmDriverStoreReport` — same schema as `Invoke-DsmD
 should not have to walk the full module. `Build-DsmIntuneScripts.ps1` copies
 them to `dist/intune/mvp/`. They are not a merge of `src/`.
 
-Each file reads from `#section Config` downward. Detection exits `1` when
-deletable `NeverAssociated` packages reach `$MvpOrphanThreshold` (default 1).
-Remediation exports, then deletes at most `$MvpMaxDeletes` (default 10).
-It never passes `pnputil /force`. Connected and disconnected-installed
-packages are not deleted. Preserve rules in that config section match
+Each file reads from `#section Config` downward. The build writes the same
+switches and settings file into that section when the MVP implements them:
+orphan threshold, whether orphan candidates fail detection, max deletes,
+elevation, `IncludePublishedName`, and the filters `Provider`, `DriverClass`,
+`PublishedName`, `OriginalName`, `HardwareId`, and `Association` (`Any` does
+not narrow the set). `-InlinePreserveRulesFile`, or `PreserveRulesPath` in
+the settings file when that file exists at build time, replaces the baked
+preserve JSON. `-PreserveRulesPath` alone is an on-endpoint path; a missing
+file exits `2`.
+
+Blocklist, signature, DiskId, DISM, device name, class GUID, driver version
+filters, cleanup preview, and report family grouping stay in the full bundles.
+A build that sets one of those still succeeds and warns that the MVP copy
+ignored it.
+
+Detection exits `1` when deletable `NeverAssociated` packages reach
+`$MvpOrphanThreshold` (default 1) and orphan detection is on. Remediation
+exports, then deletes at most `$MvpMaxDeletes` (default 10). It never passes
+`pnputil /force`. Connected and disconnected-installed packages are not
+deleted. The default preserve rules match
 `examples/preserve-rules.example.json`. A device-correlation failure exits `2`
 and does not treat packages as orphans.
-
-Change policy in `#section Config`, then rebuild. The full bundles remain the
-path that includes the Microsoft blocklist, signature signals, and DiskId catalog.
 
 ## Related
 

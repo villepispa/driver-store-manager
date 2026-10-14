@@ -8,11 +8,13 @@
 
   Concatenates Private and Public sources per bundle-order.json, appends entry templates,
   and emits Detect-DsmDriverStoreCompliance.ps1 and Remediate-DsmDriverStore.ps1.
-  Also copies the enterprise MVP scripts from scripts/intune/mvp into dist/intune/mvp.
+  Also writes the enterprise MVP scripts from scripts/intune/mvp into dist/intune/mvp,
+  baking the same switches and settings file for features those scripts implement
+  (orphan threshold, supported filters, preserve rules, max deletes, elevation).
   Bakes detect/remediate knobs from parameters (Intune Detection and Remediation
   cannot take runtime parameters). Configuration files may be on-endpoint paths
-  or inlined into the generated scripts (blocklist → Detection; preserve rules →
-  Detection and Remediation).
+  or inlined into the generated scripts (blocklist → full Detection only; preserve
+  rules → full bundles and the MVP).
   Exit 0 on success.
 
 .PARAMETER OutputDirectory
@@ -573,6 +575,7 @@ $associationAllowed = @(
 )
 $familyAllowed = @('ProviderOriginalName', 'HwId')
 $filterLines = @()
+$resolvedFilters = @{}
 foreach ($filterName in @($filterKind.Keys)) {
     $filterValue = $null
     $filterSet = $false
@@ -595,6 +598,7 @@ foreach ($filterName in @($filterKind.Keys)) {
         if ($associationAllowed -notcontains $associationText) {
             throw "Association value '$associationText' is not valid."
         }
+        $resolvedFilters[$filterName] = $associationText
         $filterLines += ('    {0} = {1}' -f $filterName, (ConvertTo-DsmPsValueLiteral -Value $associationText -Kind 'string'))
         continue
     }
@@ -603,6 +607,7 @@ foreach ($filterName in @($filterKind.Keys)) {
         continue
     }
 
+    $resolvedFilters[$filterName] = $filterValue
     $filterLines += ('    {0} = {1}' -f $filterName, (ConvertTo-DsmPsValueLiteral -Value $filterValue -Kind $kindName))
 }
 
@@ -707,6 +712,66 @@ $remediatePath = New-DsmStandaloneScript -ScriptType 'Remediation' `
     -BundleBody $bundleBody `
     -ConfigBody $remediateConfig
 
+function Set-DsmMvpAssignment {
+    param(
+        [string] $Text,
+        [string] $VariableName,
+        [string] $Literal
+    )
+
+    $pattern = '(?m)^\$' + [regex]::Escape($VariableName) + ' = .*$'
+    $match = [regex]::Match($Text, $pattern)
+    if (-not $match.Success) {
+        throw "MVP config missing `$$VariableName"
+    }
+
+    $replacement = '$' + $VariableName + ' = ' + $Literal
+    return $Text.Remove($match.Index, $match.Length).Insert($match.Index, $replacement)
+}
+
+function Set-DsmMvpPreserveHereString {
+    param(
+        [string] $Text,
+        [string] $JsonText
+    )
+
+    $pattern = "(?s)\`$MvpPreserveRulesJson = @'.*?'@"
+    $match = [regex]::Match($Text, $pattern)
+    if (-not $match.Success) {
+        throw 'MVP config missing $MvpPreserveRulesJson here-string.'
+    }
+
+    $replacement = ConvertTo-DsmPsHereStringAssignment -Name 'MvpPreserveRulesJson' -Value $JsonText
+    return $Text.Remove($match.Index, $match.Length).Insert($match.Index, $replacement)
+}
+
+$mvpIgnoredNames = @(
+    'BlocklistPath', 'InlineBlocklistFile', 'DetectBlocklisted', 'DetectSignatureIssues',
+    'SkipMicrosoftBlocklist', 'ForceBlocklistUpdate', 'MicrosoftBlocklistMaxAgeDays',
+    'UseMicrosoftBlocklist', 'VulnerableIncludesSignature', 'IncludeVulnerabilityScan',
+    'DeviceName', 'DriverVersion', 'MinDriverVersion', 'MaxDriverVersion', 'ClassGuid',
+    'FamilyGroupBy', 'IncludeCleanupPreview', 'ExportDiskIdCatalog', 'IncludeDism',
+    'InventoryMaxAgeMinutes', 'ShowEffectiveSettings', 'UpdateMicrosoftBlocklist'
+)
+$mvpIgnoredSet = @()
+foreach ($ignoredName in $mvpIgnoredNames) {
+    $ignoredSet = $false
+    if ($PSBoundParameters.ContainsKey($ignoredName)) { $ignoredSet = $true }
+    if ($null -ne $fromFile -and $fromFile.Contains($ignoredName)) { $ignoredSet = $true }
+    if ($ignoredSet) { $mvpIgnoredSet += $ignoredName }
+}
+if (@($mvpIgnoredSet).Count -gt 0) {
+    Write-Warning ("Enterprise MVP ignores unsupported Intune settings: {0}. The full bundles still receive them." -f ($mvpIgnoredSet -join ', '))
+}
+
+$mvpFilterVars = @{
+    DriverClass   = 'MvpFilterDriverClass'
+    Provider      = 'MvpFilterProvider'
+    PublishedName = 'MvpFilterPublishedName'
+    HardwareId    = 'MvpFilterHardwareId'
+    OriginalName  = 'MvpFilterOriginalName'
+}
+
 $mvpSourceDir = Join-Path $PSScriptRoot 'intune\mvp'
 $mvpOutDir = Join-Path $OutputDirectory 'mvp'
 if (-not (Test-Path -LiteralPath $mvpOutDir)) {
@@ -714,17 +779,64 @@ if (-not (Test-Path -LiteralPath $mvpOutDir)) {
 }
 $mvpDetectSource = Join-Path $mvpSourceDir 'Detect-DsmDriverStoreCompliance.ps1'
 $mvpRemediateSource = Join-Path $mvpSourceDir 'Remediate-DsmDriverStore.ps1'
+$mvpLineCounts = @{}
+$mvpDetectOut = $null
+$mvpRemediateOut = $null
 foreach ($mvpSource in @($mvpDetectSource, $mvpRemediateSource)) {
     if (-not (Test-Path -LiteralPath $mvpSource)) {
         throw "MVP source missing: $mvpSource"
     }
-    Copy-Item -LiteralPath $mvpSource -Destination (Join-Path $mvpOutDir (Split-Path -Leaf $mvpSource)) -Force
+
+    $mvpText = [System.IO.File]::ReadAllText($mvpSource)
+    $mvpIsDetect = (Split-Path -Leaf $mvpSource) -like 'Detect-*'
+    if ($mvpIsDetect) {
+        $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpOrphanThreshold' -Literal ([string][int]$OrphanThreshold)
+        $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpDetectOrphanCandidates' -Literal (ConvertTo-DsmPsBoolLiteral -Value $DetectOrphanCandidates)
+    }
+    else {
+        $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpMaxDeletes' -Literal ([string][int]$RemediationMaxDeletes)
+        $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpRequireElevation' -Literal (ConvertTo-DsmPsBoolLiteral -Value $RemediationRequireElevation)
+    }
+
+    foreach ($mvpFilterName in @($mvpFilterVars.Keys)) {
+        if (-not $resolvedFilters.ContainsKey($mvpFilterName)) { continue }
+        $mvpLiteral = ConvertTo-DsmPsValueLiteral -Value $resolvedFilters[$mvpFilterName] -Kind 'array'
+        $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName $mvpFilterVars[$mvpFilterName] -Literal $mvpLiteral
+    }
+
+    if ($resolvedFilters.ContainsKey('Association')) {
+        $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpFilterAssociation' `
+            -Literal (ConvertTo-DsmPsSingleQuotedLiteral -Value ([string]$resolvedFilters['Association']))
+    }
+
+    if ($null -ne $publishedAllow -and @($publishedAllow).Count -gt 0) {
+        $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpIncludePublishedName' `
+            -Literal (ConvertTo-DsmPsValueLiteral -Value $publishedAllow -Kind 'array')
+    }
+
+    if ($bakedPreservePath) {
+        $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpPreserveRulesPath' `
+            -Literal (ConvertTo-DsmPsSingleQuotedLiteral -Value $bakedPreservePath)
+    }
+
+    if ($null -ne $inlinePreserveText) {
+        $mvpText = Set-DsmMvpPreserveHereString -Text $mvpText -JsonText $inlinePreserveText
+    }
+
+    $mvpOutPath = Join-Path $mvpOutDir (Split-Path -Leaf $mvpSource)
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($mvpOutPath, $mvpText, $utf8NoBom)
+    $mvpLineCounts[(Split-Path -Leaf $mvpSource)] = @([System.IO.File]::ReadAllLines($mvpOutPath)).Count
+    if ($mvpIsDetect) { $mvpDetectOut = $mvpOutPath }
+    else { $mvpRemediateOut = $mvpOutPath }
 }
-$mvpDetectLines = @((Get-Content -LiteralPath $mvpDetectSource)).Count
-$mvpRemediateLines = @((Get-Content -LiteralPath $mvpRemediateSource)).Count
+$mvpDetectLines = $mvpLineCounts['Detect-DsmDriverStoreCompliance.ps1']
+$mvpRemediateLines = $mvpLineCounts['Remediate-DsmDriverStore.ps1']
 
 $detectSize = (Get-Item -LiteralPath $detectPath).Length
 $remediateSize = (Get-Item -LiteralPath $remediatePath).Length
+$mvpDetectSize = (Get-Item -LiteralPath $mvpDetectOut).Length
+$mvpRemediateSize = (Get-Item -LiteralPath $mvpRemediateOut).Length
 
 if ($detectSize -gt $intuneScriptSizeLimitBytes) {
     Write-Warning ("Detection script is {0} bytes (Intune remediations typically cap at {1})." -f `
@@ -748,15 +860,22 @@ elseif ($BlocklistPath -or $PreserveRulesPath) {
 }
 
 [pscustomobject]@{
-    DetectionScript   = $detectPath
-    RemediationScript = $remediatePath
-    DetectionBytes    = $detectSize
-    RemediationBytes  = $remediateSize
-    SourceFileCount   = @($manifest.sources).Count
-    ConfigMode        = $configLabel
+    DetectionScript       = $detectPath
+    RemediationScript     = $remediatePath
+    DetectionBytes        = $detectSize
+    RemediationBytes      = $remediateSize
+    MvpDetectionScript    = $mvpDetectOut
+    MvpRemediationScript  = $mvpRemediateOut
+    MvpDetectionLines     = $mvpDetectLines
+    MvpRemediationLines   = $mvpRemediateLines
+    MvpDetectionBytes     = $mvpDetectSize
+    MvpRemediationBytes   = $mvpRemediateSize
+    SourceFileCount       = @($manifest.sources).Count
+    ConfigMode            = $configLabel
 } | Format-List
 
-Write-Host 'Upload both scripts to Intune Proactive Remediation (64-bit, run as SYSTEM).' -ForegroundColor Green
+Write-Host 'Upload one pair to Intune Proactive Remediation (64-bit, run as SYSTEM).' -ForegroundColor Green
+Write-Host 'Full bundles are the module merge. The mvp folder is the enterprise review pair.' -ForegroundColor Green
 Write-Host 'See docs/intune-deployment.md for exit codes and pilot guidance.' -ForegroundColor Cyan
 
 if ($AgentSummary) {

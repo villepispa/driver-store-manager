@@ -17,6 +17,22 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (2026-10-14 — 0.13.0 — DSM-046)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-046 | Enterprise MVP ignored the Intune settings bake | `Build-DsmIntuneScripts.Tests.ps1`; `Dsm.IntuneMvp.Tests.ps1` |
+
+### DSM-046 — Enterprise MVP ignored the Intune settings bake
+
+- **Status:** Resolved
+- **Severity:** Medium
+- **Area:** Intune
+- **Impact:** `-SettingsFile` and the builder switches changed the full bundles only. The MVP upload pair kept the source defaults, so a Printer filter or a site preserve file never reached the review scripts.
+- **Remediation:** The build bakes orphan threshold, orphan detection, supported filters, `IncludePublishedName`, preserve rules (inline or an on-endpoint path), max deletes, and elevation into `dist/intune/mvp/`. Unsupported keys warn and stay on the full bundles.
+- **Evidence:** `DSM-PESTER-OK passed=114`. `DSM-LINT-OK findings=0 files=33`. `DSM-PS51-SMOKE-OK`. `DSM-BUILD-OK detectBytes=199881 remediateBytes=196039 sources=19 config=none mvpDetectLines=572 mvpRemediateLines=645`.
+- **Plan:** [plans/2026-10-14_dsm-046-mvp-settings_b7e2a4c1.plan.md](../plans/2026-10-14_dsm-046-mvp-settings_b7e2a4c1.plan.md)
+
 ## Resolved issues (2026-10-14 — 0.12.0 — DSM-045)
 
 | ID | Summary | Evidence |
@@ -304,6 +320,7 @@ rebuilt `dist/intune/*.ps1`.
 ## Activity
 
 <!-- ISSUES-ACTIVITY+ -->
+- **2026-10-14 10:37:59** — Resolved `DSM-046`: Intune MVP copies honor supported build switches and settings files. `DSM-VALIDATE-OK` (Pester 114, lint 0/33, PS 5.1 smoke).
 - **2026-10-13 22:48:47** — Resolved `DSM-045`: enterprise Intune MVP, 561 + 635 lines. `DSM-VALIDATE-OK` (Pester 112, lint 0/33, PS 5.1 smoke).
 - **2026-10-13 22:11:00** — Filed `DSM-045` (medium, in progress): enterprise Intune MVP, standalone detect and remediate. Plan `plans/2026-10-13_dsm-045-intune-mvp_c8e14b2a.plan.md`.
 - **2026-09-05 22:28:00** — Cut **0.9.0** (`DSM-040` `-SettingsPath` overlay). Status remains Resolved (named plan accept still open).

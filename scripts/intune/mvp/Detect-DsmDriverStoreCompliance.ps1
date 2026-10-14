@@ -20,7 +20,9 @@
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\intune\mvp\Detect-DsmDriverStoreCompliance.ps1
 
 .NOTES
-  Upload the built copy under dist/intune/mvp. Edit #section Config, then rebuild.
+  Upload the built copy under dist/intune/mvp. The build bakes the same
+  switches and settings file the full bundles use, for the filters and preserve
+  rules this script implements. Blocklist and DiskId stay in the full module.
   Exit 0 compliant, 1 non-compliant, 2 error.
 #>
 [CmdletBinding()]
@@ -31,6 +33,7 @@ $ErrorActionPreference = 'Stop'
 
 #section Config
 $MvpOrphanThreshold = 1
+$MvpDetectOrphanCandidates = $true
 $MvpFilterDriverClass = @()
 $MvpFilterProvider = @()
 $MvpFilterPublishedName = @()
@@ -38,6 +41,7 @@ $MvpFilterHardwareId = @()
 $MvpFilterOriginalName = @()
 $MvpFilterAssociation = ''
 $MvpIncludePublishedName = @()
+$MvpPreserveRulesPath = ''
 $MvpPreserveRulesJson = @'
 [
   {
@@ -178,7 +182,7 @@ function Test-MvpPackageMatches {
     }
 
     $association = [string](Get-MvpNote -Object $Filter -Name 'Association')
-    if (-not [string]::IsNullOrWhiteSpace($association)) {
+    if (-not [string]::IsNullOrWhiteSpace($association) -and $association -ne 'Any') {
         $actual = [string]$Package.DeviceAssociation
         if ($association -eq 'InUseOnly') { $association = 'Connected' }
         if ($association -eq 'UnusedOnly') {
@@ -430,7 +434,14 @@ try {
     }
 
     #section Preserve
-    $parsedRules = $MvpPreserveRulesJson | ConvertFrom-Json
+    $rulesText = $MvpPreserveRulesJson
+    if (-not [string]::IsNullOrWhiteSpace([string]$MvpPreserveRulesPath)) {
+        if (-not (Test-Path -LiteralPath $MvpPreserveRulesPath)) {
+            throw "Preserve rules file not found: $MvpPreserveRulesPath"
+        }
+        $rulesText = [System.IO.File]::ReadAllText($MvpPreserveRulesPath)
+    }
+    $parsedRules = $rulesText | ConvertFrom-Json
     foreach ($rule in $parsedRules) {
         $ruleType = [string](Get-MvpNote -Object $rule -Name 'RuleType')
         $ruleFilter = Get-MvpNote -Object $rule -Name 'Filter'
@@ -551,7 +562,7 @@ try {
     Write-Host ("DSM-MVP-DETECT deletable={0} file={1}" -f $deletable.Count, $reportPath)
 
     #section Compliance gate
-    if ($deletable.Count -ge $MvpOrphanThreshold) { exit 1 }
+    if ($MvpDetectOrphanCandidates -and $deletable.Count -ge $MvpOrphanThreshold) { exit 1 }
     exit 0
 }
 catch {

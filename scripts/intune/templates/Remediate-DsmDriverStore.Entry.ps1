@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 
 # region DSM_BUILD_CONFIG
 $DsmRemediationMaxDeletes = 10
+$DsmBackupRetentionDays = 30
 $DsmRemediationRequireElevation = $true
 $DsmPreserveRulesPath = $null
 $DsmInlinePreserveRulesContent = $null
@@ -11,6 +12,7 @@ $DsmIncludePublishedName = $null
 $DsmInventoryMaxAgeMinutes = $null
 $DsmIncludeDism = $null
 $DsmShowEffectiveSettings = $null
+$DsmRestrictProgramDataAccess = $true
 # endregion DSM_BUILD_CONFIG
 
 if ($DsmInlinePreserveRulesContent) {
@@ -23,7 +25,7 @@ if ($DsmInlinePreserveRulesContent) {
 }
 
 $DsmStateRoot = Get-DsmProgramDataRoot
-$DsmBackupRoot = Join-DsmPath $DsmStateRoot 'backups' (Get-Date -Format 'yyyy-MM-dd_HHmmss')
+$DsmBackupRoot = Join-DsmPath $DsmStateRoot 'backups'
 $DsmReportRoot = Join-DsmPath $DsmStateRoot 'reports' 'intune-remediation'
 
 foreach ($dir in @($DsmStateRoot, $DsmBackupRoot, $DsmReportRoot)) {
@@ -43,7 +45,8 @@ try {
         AllowDelete   = $true
         Confirm       = $false
         PassThru      = $true
-        MaxDeletes    = $DsmRemediationMaxDeletes
+        MaxDeletes          = $DsmRemediationMaxDeletes
+        BackupRetentionDays = $DsmBackupRetentionDays
     }
     if ($DsmPreserveRulesPath -and (Test-Path -LiteralPath $DsmPreserveRulesPath)) {
         $cleanupParams['PreserveRulesPath'] = $DsmPreserveRulesPath
@@ -91,4 +94,12 @@ try {
 catch {
     Write-Error $_
     exit 2
+}
+finally {
+    if ($DsmRestrictProgramDataAccess) {
+        if (-not (Test-Path -LiteralPath $DsmStateRoot)) {
+            New-Item -ItemType Directory -Path $DsmStateRoot -Force | Out-Null
+        }
+        Set-DsmRestrictedDirectoryAcl -LiteralPath $DsmStateRoot
+    }
 }

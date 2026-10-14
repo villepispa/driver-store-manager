@@ -7,7 +7,28 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.13.0**._
+_Nothing queued — latest release: **0.14.0**._
+
+## [0.14.0] — 2026-10-14
+
+### Changed
+
+- **Backup folder name** — export-before-delete stores each package as
+  `<original.inf>_<oem#.inf>` (for example `iigd_dch.inf_oem123.inf`) so the
+  same original driver sorts together. A missing original name keeps
+  `<oem#.inf>` only. Applies to the module cleanup and the enterprise MVP
+  remediate script.
+- **DSM-048:** Backups are `backups\<Class>\<original.inf>_<oem#.inf>`
+  (for example `backups\Display\iigd_dch.inf_oem123.inf`). When inventory has
+  no original name, the only INF in the export supplies it. Package folders
+  older than `BackupRetentionDays` (default 30; `0` keeps them) are deleted
+  on a delete run, in the module and the enterprise MVP.
+- **DSM-049:** `-RestrictProgramDataAccess` (default on for Intune builds and
+  the MVP) grants SYSTEM full control and Administrators modify on
+  `%ProgramData%\DriverStoreManager` and its children. Signed-in users lose
+  access. `false` keeps the inherited ProgramData permissions.
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.14.0` for this
+  release.
 
 ## [0.13.0] — 2026-10-14
 

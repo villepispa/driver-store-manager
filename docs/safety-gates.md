@@ -26,12 +26,26 @@ The cmdlet logs skipped packages as `SkippedInUse` or `SkippedDisconnectedInstal
 Every package slated for removal is exported with:
 
 ```cmd
-pnputil /export-driver <PublishedName> <BackupRoot>\<PublishedName>\
+pnputil /export-driver <PublishedName> <BackupRoot>\<Class>\<OriginalName>_<PublishedName>\
 ```
+
+The class folder groups every export of that class (`Display`, `Net`, and so on).
+The child folder keeps the original INF name so related packages sort together,
+then the published `oem#.inf` name. Characters that are illegal in a file name
+become `_`. When inventory has no original name, the only `.inf` written into
+the export supplies it. A missing class uses `Unknown`.
 
 If export fails, delete is **aborted** for that package.
 
-Default backup root: `backups/<yyyy-MM-dd_HHmmss>/` under the product repo (gitignored).
+Default backup root: `backups/` under the product repo (gitignored). On a delete
+run, package folders older than `BackupRetentionDays` (default 30) are removed.
+`0` keeps every backup. Legacy `backups/<yyyy-MM-dd_HHmmss>/` trees follow the
+same age rule.
+
+Intune builds set `RestrictProgramDataAccess` on by default. That removes
+inherited ProgramData permissions from `%ProgramData%\DriverStoreManager` and
+its children. SYSTEM has full control. Administrators have modify. An elevated
+run also sets the owner to Administrators.
 
 Keep large `pnputil /export-driver` trees and `audit-output/` on a **fast local disk**.
 Do not sync multi-GB export folders through cloud sync clients (for example Proton Drive)

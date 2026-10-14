@@ -27,7 +27,9 @@ Describe 'Remove-DsmUnusedDriverPackages elevation and delete mocks' {
         function Export-DsmDriverPackageBackup {
             param(
                 [string] $PublishedName,
-                [string] $BackupRoot
+                [string] $BackupRoot,
+                [string] $OriginalName,
+                [string] $DriverClass
             )
 
             [void]$script:DsmMockExportCalls.Add($PublishedName)
@@ -61,7 +63,9 @@ Describe 'Remove-DsmUnusedDriverPackages elevation and delete mocks' {
         function Export-DsmDriverPackageBackup {
             param(
                 [string] $PublishedName,
-                [string] $BackupRoot
+                [string] $BackupRoot,
+                [string] $OriginalName,
+                [string] $DriverClass
             )
 
             throw 'mock export failure'
@@ -91,7 +95,9 @@ Describe 'Remove-DsmUnusedDriverPackages elevation and delete mocks' {
         function Export-DsmDriverPackageBackup {
             param(
                 [string] $PublishedName,
-                [string] $BackupRoot
+                [string] $BackupRoot,
+                [string] $OriginalName,
+                [string] $DriverClass
             )
 
             return (Join-Path $BackupRoot $PublishedName)
@@ -122,7 +128,9 @@ Describe 'Remove-DsmUnusedDriverPackages elevation and delete mocks' {
         function Export-DsmDriverPackageBackup {
             param(
                 [string] $PublishedName,
-                [string] $BackupRoot
+                [string] $BackupRoot,
+                [string] $OriginalName,
+                [string] $DriverClass
             )
 
             return (Join-Path $BackupRoot $PublishedName)
@@ -144,5 +152,56 @@ Describe 'Remove-DsmUnusedDriverPackages elevation and delete mocks' {
         $run.Summary.DeletedCount | Should-Be 0
         $run.Summary.ExportOrDeleteFailedCount | Should-Be 1
         $run.Results[0].Action | Should-Be 'ExportOrDeleteFailed'
+    }
+
+    It 'Names the backup folder original.inf_oemnnn.inf' {
+        Get-DsmDriverBackupFolderName -PublishedName 'oem123.inf' -OriginalName 'iigd_dch.inf' |
+            Should-Be 'iigd_dch.inf_oem123.inf'
+        Get-DsmDriverBackupFolderName -PublishedName 'oem123.inf' |
+            Should-Be 'oem123.inf'
+        Get-DsmDriverBackupFolderName -PublishedName 'oem123.inf' -OriginalName 'iigd\dch.inf' |
+            Should-Be 'iigd_dch.inf_oem123.inf'
+        Get-DsmBackupClassFolderName -DriverClass 'Display' | Should-Be 'Display'
+        Get-DsmBackupClassFolderName -DriverClass '' | Should-Be 'Unknown'
+    }
+
+    It 'Renames an unknown export from the only INF and stores it under the class' {
+        function Invoke-DsmPnPUtil {
+            param(
+                [Parameter(Mandatory)]
+                [string[]] $ArgumentList,
+                [string] $OutputFile
+            )
+
+            $dest = $ArgumentList[2]
+            Set-Content -LiteralPath (Join-Path $dest 'iigd_dch.inf') -Value '[Version]' -Encoding ascii
+            return @('OK')
+        }
+
+        $exportDir = Export-DsmDriverPackageBackup -PublishedName 'oem123.inf' -BackupRoot $TestDrive `
+            -DriverClass 'Display'
+        $exportDir | Should-Be (Join-Path $TestDrive 'Display\iigd_dch.inf_oem123.inf')
+        Test-Path -LiteralPath (Join-Path $exportDir 'iigd_dch.inf') | Should-Be $true
+        Test-Path -LiteralPath (Join-Path $TestDrive '_export\oem123.inf') | Should-Be $false
+    }
+
+    It 'Removes package backup folders older than the retention window' {
+        $root = Join-Path $TestDrive 'backups'
+        $old = Join-Path $root 'Display\iigd_dch.inf_oem1.inf'
+        $fresh = Join-Path $root 'Display\iigd_dch.inf_oem2.inf'
+        $legacy = Join-Path $root '2020-01-01_000000'
+        New-Item -ItemType Directory -Path $old -Force | Out-Null
+        New-Item -ItemType Directory -Path $fresh -Force | Out-Null
+        New-Item -ItemType Directory -Path $legacy -Force | Out-Null
+        (Get-Item -LiteralPath $old).CreationTime = (Get-Date).AddDays(-40)
+        (Get-Item -LiteralPath $legacy).CreationTime = (Get-Date).AddDays(-40)
+
+        $removed = Remove-DsmOldDriverBackups -BackupRoot $root -OlderThanDays 30
+        $removed | Should-Be 2
+        Test-Path -LiteralPath $old | Should-Be $false
+        Test-Path -LiteralPath $fresh | Should-Be $true
+        Test-Path -LiteralPath $legacy | Should-Be $false
+        Remove-DsmOldDriverBackups -BackupRoot $root -OlderThanDays 0 | Should-Be 0
+        Test-Path -LiteralPath $fresh | Should-Be $true
     }
 }

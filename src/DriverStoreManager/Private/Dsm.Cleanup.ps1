@@ -321,10 +321,127 @@ function Write-DsmCleanupResultLog {
     }
 }
 
+function Get-DsmSafePathSegment {
+    <#
+    .SYNOPSIS
+        Makes one path segment safe as a Windows folder name.
+    #>
+    [CmdletBinding()]
+    param(
+        [string] $Name
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name)) {
+        return ''
+    }
+
+    $invalid = [System.IO.Path]::GetInvalidFileNameChars()
+    $builder = New-Object System.Text.StringBuilder
+    foreach ($ch in $Name.ToCharArray()) {
+        if ($invalid -contains $ch) {
+            [void]$builder.Append('_')
+        }
+        else {
+            [void]$builder.Append($ch)
+        }
+    }
+
+    $safe = $builder.ToString().Trim().TrimEnd('.')
+    if ([string]::IsNullOrWhiteSpace($safe) -or $safe -eq '.' -or $safe -eq '..') {
+        return ''
+    }
+
+    return $safe
+}
+
+function Get-DsmDriverBackupFolderName {
+    <#
+    .SYNOPSIS
+        Backup child folder: original INF name, then the published oem name.
+    .DESCRIPTION
+        iigd_dch.inf_oem123.inf sorts the same original driver together and
+        still shows which published package was exported. A missing original
+        name keeps the published name alone.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $PublishedName,
+
+        [string] $OriginalName
+    )
+
+    $safeOriginal = Get-DsmSafePathSegment -Name $OriginalName
+    if ([string]::IsNullOrWhiteSpace($safeOriginal)) {
+        return $PublishedName
+    }
+
+    return ('{0}_{1}' -f $safeOriginal, $PublishedName)
+}
+
+function Get-DsmBackupClassFolderName {
+    <#
+    .SYNOPSIS
+        Class directory under the backup root. Blank or unsafe classes become Unknown.
+    #>
+    [CmdletBinding()]
+    param(
+        [string] $DriverClass
+    )
+
+    $safe = Get-DsmSafePathSegment -Name $DriverClass
+    if ([string]::IsNullOrWhiteSpace($safe) -or $safe -eq '_export') {
+        return 'Unknown'
+    }
+
+    return $safe
+}
+
+function Get-DsmExportedOriginalInfName {
+    <#
+    .SYNOPSIS
+        Original INF file name from an export directory when inventory did not supply one.
+    .DESCRIPTION
+        pnputil /export-driver writes the original INF into the target directory.
+        When that directory contains one INF, its file name is the original name.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $ExportDirectory,
+
+        [string] $KnownOriginalName
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($KnownOriginalName)) {
+        return $KnownOriginalName
+    }
+
+    $files = @(Get-ChildItem -LiteralPath $ExportDirectory -Filter '*.inf' -File -Recurse -ErrorAction SilentlyContinue)
+    if ($files.Count -eq 1) {
+        return $files[0].Name
+    }
+
+    if ($files.Count -gt 1) {
+        foreach ($file in $files) {
+            if ($file.Name -notmatch '^oem\d+\.inf$') {
+                return $file.Name
+            }
+        }
+
+        return $files[0].Name
+    }
+
+    return ''
+}
+
 function Export-DsmDriverPackageBackup {
     <#
     .SYNOPSIS
         Exports a driver package with pnputil /export-driver (no /force).
+    .DESCRIPTION
+        Stages the export, then moves it to BackupRoot\Class\original.inf_oem#.inf.
+        When OriginalName is empty, the only INF in the export supplies the name.
     #>
     [CmdletBinding()]
     param(
@@ -332,17 +449,105 @@ function Export-DsmDriverPackageBackup {
         [string] $PublishedName,
 
         [Parameter(Mandatory)]
-        [string] $BackupRoot
+        [string] $BackupRoot,
+
+        [string] $OriginalName,
+
+        [string] $DriverClass
     )
 
-    $exportDir = Join-DsmPath $BackupRoot $PublishedName
-    New-Item -ItemType Directory -Path $exportDir -Force | Out-Null
+    $stageParent = Join-DsmPath $BackupRoot '_export'
+    $stageDir = Join-DsmPath $stageParent $PublishedName
+    if (Test-Path -LiteralPath $stageDir) {
+        Remove-Item -LiteralPath $stageDir -Recurse -Force
+    }
 
+    New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
     Invoke-DsmPnPUtil -ArgumentList @(
-        '/export-driver', $PublishedName, $exportDir
+        '/export-driver', $PublishedName, $stageDir
     ) | Out-Null
 
-    return $exportDir
+    $discovered = Get-DsmExportedOriginalInfName -ExportDirectory $stageDir -KnownOriginalName $OriginalName
+    $folderName = Get-DsmDriverBackupFolderName -PublishedName $PublishedName -OriginalName $discovered
+    $classFolder = Get-DsmBackupClassFolderName -DriverClass $DriverClass
+    $destParent = Join-DsmPath $BackupRoot $classFolder
+    if (-not (Test-Path -LiteralPath $destParent)) {
+        New-Item -ItemType Directory -Path $destParent -Force | Out-Null
+    }
+
+    $dest = Join-DsmPath $destParent $folderName
+    if (Test-Path -LiteralPath $dest) {
+        Remove-Item -LiteralPath $dest -Recurse -Force
+    }
+
+    Move-Item -LiteralPath $stageDir -Destination $dest
+    return $dest
+}
+
+function Remove-DsmOldDriverBackups {
+    <#
+    .SYNOPSIS
+        Deletes package backup folders older than a number of days.
+    .DESCRIPTION
+        Compares each package folder's creation time. Also removes legacy
+        backups\yyyy-MM-dd_HHmmss trees and staged exports of that age.
+        Zero or negative days deletes nothing. Empty class folders are removed.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $BackupRoot,
+
+        [int] $OlderThanDays = 0
+    )
+
+    if ($OlderThanDays -le 0) {
+        return 0
+    }
+
+    if (-not (Test-Path -LiteralPath $BackupRoot)) {
+        return 0
+    }
+
+    $cutoff = (Get-Date).AddDays(-1 * $OlderThanDays)
+    $removed = 0
+    $packagePattern = '(?i)(^oem\d+\.inf$)|(_oem\d+\.inf$)'
+    foreach ($child in @(Get-ChildItem -LiteralPath $BackupRoot -Directory -ErrorAction SilentlyContinue)) {
+        if ($child.Name -eq '_export') {
+            foreach ($staged in @(Get-ChildItem -LiteralPath $child.FullName -Directory -ErrorAction SilentlyContinue)) {
+                if ($staged.CreationTime -lt $cutoff) {
+                    Remove-Item -LiteralPath $staged.FullName -Recurse -Force
+                    $removed++
+                }
+            }
+
+            continue
+        }
+
+        if ($child.Name -match '^\d{4}-\d{2}-\d{2}_\d{6}$') {
+            if ($child.CreationTime -lt $cutoff) {
+                Remove-Item -LiteralPath $child.FullName -Recurse -Force
+                $removed++
+            }
+
+            continue
+        }
+
+        foreach ($packageDir in @(Get-ChildItem -LiteralPath $child.FullName -Directory -ErrorAction SilentlyContinue)) {
+            $isPackage = $packageDir.Name -match $packagePattern
+            if ($isPackage -and $packageDir.CreationTime -lt $cutoff) {
+                Remove-Item -LiteralPath $packageDir.FullName -Recurse -Force
+                $removed++
+            }
+        }
+
+        $left = @(Get-ChildItem -LiteralPath $child.FullName -Force -ErrorAction SilentlyContinue)
+        if ($left.Count -eq 0) {
+            Remove-Item -LiteralPath $child.FullName -Force
+        }
+    }
+
+    return $removed
 }
 
 function Remove-DsmDriverPackageFromStore {

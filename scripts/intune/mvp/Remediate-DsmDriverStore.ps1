@@ -8,14 +8,18 @@
 
   Standalone Windows PowerShell 5.1 script for Intune Proactive Remediation.
   It inventories staged oem*.inf packages, classifies device association, applies
-  the preserve rules in #section Config, exports each deletable package, then
-  deletes at most the configured number. Only NeverAssociated packages that are
+  the preserve rules in #section Config, exports each deletable package under
+  backups\<Class>\<original.inf>_<oem#.inf>, then
+  deletes at most the configured number. Backups older than
+  $MvpBackupRetentionDays (default 30; 0 keeps them) are removed first.
+  Only NeverAssociated packages that are
   not preserved are deleted. The pnputil force switch is not used. A fresh association
   check runs again before each delete. Blocklist and DiskId stay in the full module.
 
   Test seams (unset on Intune devices): DSM_MVP_STUB_PNPUTIL=1 reads CSV
   fixtures from DSM_MVP_FIXTURE_ROOT and does not call pnputil. DSM_MVP_STATE_ROOT
   replaces ProgramData. DSM_MVP_ASSUME_ELEVATED=1 skips the administrator check.
+  DSM_MVP_SKIP_STATE_ACL=1 leaves the state-folder access list unchanged.
   A stub without fixtures exits 2.
 
 .EXAMPLE
@@ -35,7 +39,9 @@ $ErrorActionPreference = 'Stop'
 
 #section Config
 $MvpMaxDeletes = 10
+$MvpBackupRetentionDays = 30
 $MvpRequireElevation = $true
+$MvpRestrictProgramDataAccess = $true
 $MvpFilterDriverClass = @()
 $MvpFilterProvider = @()
 $MvpFilterPublishedName = @()
@@ -532,6 +538,66 @@ try {
         [void]$deletable.Add($pkg)
     }
 
+    function Set-MvpRestrictedItemAcl {
+        param(
+            [Parameter(Mandatory)]
+            [string] $LiteralPath,
+            [switch] $Directory
+        )
+        $system = New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-18'
+        $admins = New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-32-544'
+        $allow = [System.Security.AccessControl.AccessControlType]::Allow
+        $acl = Get-Acl -LiteralPath $LiteralPath
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($rule in @($acl.Access)) {
+            try { [void]$acl.RemoveAccessRule($rule) }
+            catch { Write-Verbose $_.Exception.Message }
+        }
+        if ($Directory) {
+            $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+            $propagate = [System.Security.AccessControl.PropagationFlags]::None
+            $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                        $system, 'FullControl', $inherit, $propagate, $allow)))
+            $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                        $admins, 'Modify', $inherit, $propagate, $allow)))
+        }
+        else {
+            $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                        $system, 'FullControl', $allow)))
+            $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                        $admins, 'Modify', $allow)))
+        }
+        Set-Acl -LiteralPath $LiteralPath -AclObject $acl
+        $winIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $winPrincipal = New-Object Security.Principal.WindowsPrincipal $winIdentity
+        if ($winPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            try {
+                $owned = Get-Acl -LiteralPath $LiteralPath
+                $owned.SetOwner($admins)
+                Set-Acl -LiteralPath $LiteralPath -AclObject $owned
+            }
+            catch { Write-Verbose $_.Exception.Message }
+        }
+    }
+
+    function Set-MvpRestrictedDirectoryAcl {
+        param([Parameter(Mandatory)] [string] $LiteralPath)
+        if (-not (Test-Path -LiteralPath $LiteralPath)) {
+            New-Item -ItemType Directory -Path $LiteralPath -Force | Out-Null
+        }
+        $rootItem = Get-Item -LiteralPath $LiteralPath -Force
+        $files = @(Get-ChildItem -LiteralPath $rootItem.FullName -Recurse -Force -File -ErrorAction SilentlyContinue)
+        foreach ($file in $files) {
+            Set-MvpRestrictedItemAcl -LiteralPath $file.FullName
+        }
+        $directories = @(Get-ChildItem -LiteralPath $rootItem.FullName -Recurse -Force -Directory -ErrorAction SilentlyContinue)
+        $orderedDirs = @($directories | Sort-Object { $_.FullName.Length } -Descending)
+        foreach ($dir in $orderedDirs) {
+            Set-MvpRestrictedItemAcl -LiteralPath $dir.FullName -Directory
+        }
+        Set-MvpRestrictedItemAcl -LiteralPath $rootItem.FullName -Directory
+    }
+
     #section Elevation
     if ($MvpRequireElevation -and $env:DSM_MVP_ASSUME_ELEVATED -ne '1') {
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -549,11 +615,56 @@ try {
         $mvpBase = Join-Path $env:ProgramData 'DriverStoreManager'
     }
     $stamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
-    $backupRoot = Join-Path (Join-Path $mvpBase 'backups') $stamp
+    $backupRoot = Join-Path $mvpBase 'backups'
     $reportRoot = Join-Path (Join-Path $mvpBase 'reports') 'intune-mvp-remediation'
     foreach ($dir in @($backupRoot, $reportRoot)) {
         if (-not (Test-Path -LiteralPath $dir)) {
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+    }
+
+    function Get-MvpSafePathSegment {
+        param([string] $Name)
+        if ([string]::IsNullOrWhiteSpace($Name)) { return '' }
+        $invalid = [System.IO.Path]::GetInvalidFileNameChars()
+        $builder = New-Object System.Text.StringBuilder
+        foreach ($ch in $Name.ToCharArray()) {
+            if ($invalid -contains $ch) { [void]$builder.Append('_') }
+            else { [void]$builder.Append($ch) }
+        }
+        $safe = $builder.ToString().Trim().TrimEnd('.')
+        if ([string]::IsNullOrWhiteSpace($safe) -or $safe -eq '.' -or $safe -eq '..') { return '' }
+        return $safe
+    }
+
+    if ($MvpBackupRetentionDays -gt 0) {
+        $cutoff = (Get-Date).AddDays(-1 * $MvpBackupRetentionDays)
+        $packagePattern = '(?i)(^oem\d+\.inf$)|(_oem\d+\.inf$)'
+        foreach ($child in @(Get-ChildItem -LiteralPath $backupRoot -Directory -ErrorAction SilentlyContinue)) {
+            if ($child.Name -eq '_export') {
+                foreach ($staged in @(Get-ChildItem -LiteralPath $child.FullName -Directory -ErrorAction SilentlyContinue)) {
+                    if ($staged.CreationTime -lt $cutoff) {
+                        Remove-Item -LiteralPath $staged.FullName -Recurse -Force
+                    }
+                }
+                continue
+            }
+            if ($child.Name -match '^\d{4}-\d{2}-\d{2}_\d{6}$') {
+                if ($child.CreationTime -lt $cutoff) {
+                    Remove-Item -LiteralPath $child.FullName -Recurse -Force
+                }
+                continue
+            }
+            foreach ($packageDir in @(Get-ChildItem -LiteralPath $child.FullName -Directory -ErrorAction SilentlyContinue)) {
+                $isPackage = $packageDir.Name -match $packagePattern
+                if ($isPackage -and $packageDir.CreationTime -lt $cutoff) {
+                    Remove-Item -LiteralPath $packageDir.FullName -Recurse -Force
+                }
+            }
+            $left = @(Get-ChildItem -LiteralPath $child.FullName -Force -ErrorAction SilentlyContinue)
+            if ($left.Count -eq 0) {
+                Remove-Item -LiteralPath $child.FullName -Force
+            }
         }
     }
 
@@ -579,12 +690,51 @@ try {
             continue
         }
 
-        $exportDir = Join-Path $backupRoot ([string]$pkg.PublishedName)
-        if (-not (Test-Path -LiteralPath $exportDir)) {
-            New-Item -ItemType Directory -Path $exportDir -Force | Out-Null
+        $publishedName = [string]$pkg.PublishedName
+        $stageParent = Join-Path $backupRoot '_export'
+        if (-not (Test-Path -LiteralPath $stageParent)) {
+            New-Item -ItemType Directory -Path $stageParent -Force | Out-Null
         }
+        $stageDir = Join-Path $stageParent $publishedName
+        if (Test-Path -LiteralPath $stageDir) {
+            Remove-Item -LiteralPath $stageDir -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
         try {
-            Invoke-MvpPnPUtil -ArgumentList @('/export-driver', [string]$pkg.PublishedName, $exportDir) | Out-Null
+            Invoke-MvpPnPUtil -ArgumentList @('/export-driver', $publishedName, $stageDir) | Out-Null
+            $originalName = [string]$pkg.OriginalName
+            if ([string]::IsNullOrWhiteSpace($originalName)) {
+                $infFiles = @(Get-ChildItem -LiteralPath $stageDir -Filter '*.inf' -File -Recurse -ErrorAction SilentlyContinue)
+                if ($infFiles.Count -eq 1) {
+                    $originalName = $infFiles[0].Name
+                }
+                elseif ($infFiles.Count -gt 1) {
+                    foreach ($infFile in $infFiles) {
+                        if ($infFile.Name -notmatch '^oem\d+\.inf$') {
+                            $originalName = $infFile.Name
+                            break
+                        }
+                    }
+                }
+            }
+            $safeOriginal = Get-MvpSafePathSegment -Name $originalName
+            $folderName = $publishedName
+            if (-not [string]::IsNullOrWhiteSpace($safeOriginal)) {
+                $folderName = $safeOriginal + '_' + $publishedName
+            }
+            $className = Get-MvpSafePathSegment -Name ([string]$pkg.DriverClass)
+            if ([string]::IsNullOrWhiteSpace($className) -or $className -eq '_export') {
+                $className = 'Unknown'
+            }
+            $destParent = Join-Path $backupRoot $className
+            if (-not (Test-Path -LiteralPath $destParent)) {
+                New-Item -ItemType Directory -Path $destParent -Force | Out-Null
+            }
+            $exportDir = Join-Path $destParent $folderName
+            if (Test-Path -LiteralPath $exportDir) {
+                Remove-Item -LiteralPath $exportDir -Recurse -Force
+            }
+            Move-Item -LiteralPath $stageDir -Destination $exportDir
         }
         catch {
             $failedCount++
@@ -634,6 +784,9 @@ try {
     }
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
     [System.IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json -Depth 5), $utf8NoBom)
+    if ($MvpRestrictProgramDataAccess -and $env:DSM_MVP_SKIP_STATE_ACL -ne '1') {
+        Set-MvpRestrictedDirectoryAcl -LiteralPath $mvpBase
+    }
     Write-Host ("DSM-MVP-REMEDIATE deleted={0} failed={1} file={2}" -f $deletedCount, $failedCount, $summaryPath)
     if ($failedCount -gt 0) { exit 2 }
     exit 0

@@ -23,7 +23,8 @@ BeforeAll {
         param(
             [Parameter(Mandatory)] [string] $ScriptPath,
             [Parameter(Mandatory)] [string] $FixtureRoot,
-            [Parameter(Mandatory)] [string] $StateRoot
+            [Parameter(Mandatory)] [string] $StateRoot,
+            [switch] $ApplyStateAcl
         )
         $previous = @{
             DSM_MVP_STUB_PNPUTIL    = $env:DSM_MVP_STUB_PNPUTIL
@@ -31,6 +32,7 @@ BeforeAll {
             DSM_MVP_STATE_ROOT      = $env:DSM_MVP_STATE_ROOT
             DSM_MVP_STUB_LOG        = $env:DSM_MVP_STUB_LOG
             DSM_MVP_ASSUME_ELEVATED = $env:DSM_MVP_ASSUME_ELEVATED
+            DSM_MVP_SKIP_STATE_ACL  = $env:DSM_MVP_SKIP_STATE_ACL
         }
         $logPath = Join-Path $StateRoot 'pnputil-stub.log'
         New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
@@ -39,6 +41,8 @@ BeforeAll {
         $env:DSM_MVP_STATE_ROOT = $StateRoot
         $env:DSM_MVP_STUB_LOG = $logPath
         $env:DSM_MVP_ASSUME_ELEVATED = '1'
+        if ($ApplyStateAcl) { $env:DSM_MVP_SKIP_STATE_ACL = '0' }
+        else { $env:DSM_MVP_SKIP_STATE_ACL = '1' }
         try {
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName = (Get-Process -Id $PID).Path
@@ -54,8 +58,13 @@ BeforeAll {
             [void]$stdoutTask.Wait()
             [void]$stderrTask.Wait()
             $logText = ''
-            if (Test-Path -LiteralPath $logPath) {
-                $logText = [System.IO.File]::ReadAllText($logPath)
+            try {
+                if (Test-Path -LiteralPath $logPath) {
+                    $logText = [System.IO.File]::ReadAllText($logPath)
+                }
+            }
+            catch {
+                $logText = ''
             }
             return [pscustomobject]@{
                 ExitCode = $proc.ExitCode
@@ -70,6 +79,7 @@ BeforeAll {
             $env:DSM_MVP_STATE_ROOT = $previous.DSM_MVP_STATE_ROOT
             $env:DSM_MVP_STUB_LOG = $previous.DSM_MVP_STUB_LOG
             $env:DSM_MVP_ASSUME_ELEVATED = $previous.DSM_MVP_ASSUME_ELEVATED
+            $env:DSM_MVP_SKIP_STATE_ACL = $previous.DSM_MVP_SKIP_STATE_ACL
         }
     }
 
@@ -169,6 +179,8 @@ Describe 'Enterprise Intune MVP scripts' {
         $deleteAt = $run.Log.IndexOf('delete-driver oem9.inf')
         $exportAt | Should -BeGreaterThan -1
         $deleteAt | Should -BeGreaterThan $exportAt
+        $packageDir = Join-Path $state 'backups\System\orphan.inf_oem9.inf'
+        Test-Path -LiteralPath $packageDir | Should -Be $true
         $run.Log | Should -Not -Match 'delete-driver oem1.inf'
         $run.Log | Should -Not -Match 'delete-driver oem8.inf'
         $summaryFile = Get-ChildItem -LiteralPath (Join-Path $state 'reports\intune-mvp-remediation') -Filter 'remediation-summary_*.json' |
@@ -210,5 +222,38 @@ Describe 'Enterprise Intune MVP scripts' {
         $missingRun = Invoke-MvpChild -ScriptPath $missingScript -FixtureRoot $fixture -StateRoot (Join-Path $TestDrive 'missing-path-state')
         $missingRun.ExitCode | Should -Be 2
         $missingRun.StdErr | Should -Match 'Preserve rules file not found'
+    }
+
+    It 'Limits the state folder to SYSTEM full control and Administrators modify' {
+        $fixture = Join-Path $TestDrive 'acl-fixture'
+        $state = Join-Path $TestDrive 'acl-state'
+        New-MvpFixtureSet -Root $fixture -ExtraDriverLines @('oem9.inf,orphan.inf,OrphanCo,System,1.0.0.0,,orphan.sys')
+        $run = $null
+        try {
+            $run = Invoke-MvpChild -ScriptPath $script:RemediateScript -FixtureRoot $fixture -StateRoot $state -ApplyStateAcl
+            $run.ExitCode | Should -Be 0
+            $run.StdErr | Should -BeNullOrEmpty
+        }
+        finally {
+            $pending = New-Object System.Collections.Generic.Queue[string]
+            $pending.Enqueue($state)
+            while ($pending.Count -gt 0) {
+                $current = $pending.Dequeue()
+                $dirSecurity = New-Object System.Security.AccessControl.DirectorySecurity
+                $dirSecurity.SetAccessRuleProtection($false, $false)
+                $dirInfo = New-Object System.IO.DirectoryInfo $current
+                [System.IO.FileSystemAclExtensions]::SetAccessControl($dirInfo, $dirSecurity)
+                foreach ($entry in @(Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue)) {
+                    if ($entry.PSIsContainer) {
+                        $pending.Enqueue($entry.FullName)
+                    }
+                    else {
+                        $fileSecurity = New-Object System.Security.AccessControl.FileSecurity
+                        $fileSecurity.SetAccessRuleProtection($false, $false)
+                        [System.IO.FileSystemAclExtensions]::SetAccessControl($entry, $fileSecurity)
+                    }
+                }
+            }
+        }
     }
 }

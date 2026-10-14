@@ -13,6 +13,46 @@ Describe 'Dsm.Runtime' {
     It 'Test-DsmIsPowerShellCore returns a boolean' {
         ($r = Test-DsmIsPowerShellCore) -is [bool] | Should-Be $true
     }
+
+    It 'Restricts a directory tree to SYSTEM and Administrators' {
+        $root = Join-Path $TestDrive 'state'
+        $child = Join-Path $root 'backups'
+        $file = Join-Path $child 'note.txt'
+        New-Item -ItemType Directory -Path $child -Force | Out-Null
+        Set-Content -LiteralPath $file -Value 'driver' -Encoding ascii
+        try {
+            Set-DsmRestrictedDirectoryAcl -LiteralPath $root
+            $denied = $false
+            try {
+                Get-Content -LiteralPath $file -ErrorAction Stop | Out-Null
+            }
+            catch {
+                $denied = $true
+            }
+            $denied | Should-Be $true
+        }
+        finally {
+            $pending = New-Object System.Collections.Generic.Queue[string]
+            $pending.Enqueue($root)
+            while ($pending.Count -gt 0) {
+                $current = $pending.Dequeue()
+                $dirSecurity = New-Object System.Security.AccessControl.DirectorySecurity
+                $dirSecurity.SetAccessRuleProtection($false, $false)
+                $dirInfo = New-Object System.IO.DirectoryInfo $current
+                [System.IO.FileSystemAclExtensions]::SetAccessControl($dirInfo, $dirSecurity)
+                foreach ($entry in @(Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue)) {
+                    if ($entry.PSIsContainer) {
+                        $pending.Enqueue($entry.FullName)
+                    }
+                    else {
+                        $fileSecurity = New-Object System.Security.AccessControl.FileSecurity
+                        $fileSecurity.SetAccessRuleProtection($false, $false)
+                        [System.IO.FileSystemAclExtensions]::SetAccessControl($entry, $fileSecurity)
+                    }
+                }
+            }
+        }
+    }
 }
 
 Describe 'ConvertFrom-PnPUtilDriverCsv' {

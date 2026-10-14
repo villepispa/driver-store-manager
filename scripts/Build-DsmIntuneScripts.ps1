@@ -48,6 +48,16 @@
 .PARAMETER RemediationMaxDeletes
   Baked `$DsmRemediationMaxDeletes` (default 10).
 
+.PARAMETER BackupRetentionDays
+  Baked `$DsmBackupRetentionDays` and the enterprise MVP `$MvpBackupRetentionDays`
+  (default 30). 0 keeps every backup.
+
+.PARAMETER RestrictProgramDataAccess
+  Baked `$DsmRestrictProgramDataAccess` and the enterprise MVP
+  `$MvpRestrictProgramDataAccess` (default `$true`). SYSTEM gets full control
+  of `%ProgramData%\DriverStoreManager`. Administrators get modify. Signed-in
+  users get no access.
+
 .PARAMETER RemediationRequireElevation
   Baked `$DsmRemediationRequireElevation` (default `$true`).
 
@@ -193,6 +203,11 @@ param(
     [bool] $ForceBlocklistUpdate = $false,
 
     [int] $RemediationMaxDeletes = 10,
+
+    [ValidateRange(0, 36500)]
+    [int] $BackupRetentionDays = 30,
+
+    [bool] $RestrictProgramDataAccess = $true,
 
     [bool] $RemediationRequireElevation = $true,
 
@@ -526,6 +541,14 @@ IncludeWindowsBuiltIn cannot be enabled for Intune. Inbox driver manifests stay 
         $RemediationMaxDeletes = [int]$fromFile['MaxDeletes']
     }
 
+    if (-not $PSBoundParameters.ContainsKey('BackupRetentionDays') -and $fromFile.Contains('BackupRetentionDays')) {
+        $BackupRetentionDays = [int]$fromFile['BackupRetentionDays']
+    }
+
+    if (-not $PSBoundParameters.ContainsKey('RestrictProgramDataAccess') -and $fromFile.Contains('RestrictProgramDataAccess')) {
+        $RestrictProgramDataAccess = [bool]$fromFile['RestrictProgramDataAccess']
+    }
+
     if (-not $PSBoundParameters.ContainsKey('SkipMicrosoftBlocklist') -and $fromFile.Contains('SkipMicrosoftBlocklist')) {
         $SkipMicrosoftBlocklist = [bool]$fromFile['SkipMicrosoftBlocklist']
     }
@@ -667,6 +690,7 @@ $sharedProfile = @(
     ('$DsmInventoryMaxAgeMinutes = {0}' -f $inventoryAgeLiteral)
     ('$DsmIncludeDism = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $includeDismValue))
     ('$DsmShowEffectiveSettings = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $showSettings))
+    ('$DsmRestrictProgramDataAccess = {0}' -f (ConvertTo-DsmPsBoolLiteral -Value $RestrictProgramDataAccess))
 )
 
 $detectConfig = @(
@@ -692,6 +716,7 @@ $detectConfig = $detectConfig -join "`r`n"
 
 $remediateConfig = @(
     ('$DsmRemediationMaxDeletes = {0}' -f $RemediationMaxDeletes)
+    ('$DsmBackupRetentionDays = {0}' -f $BackupRetentionDays)
     ('$DsmRemediationRequireElevation = {0}' -f (ConvertTo-DsmPsBoolLiteral -Value $RemediationRequireElevation))
     ('$DsmPreserveRulesPath = {0}' -f (ConvertTo-DsmPsSingleQuotedLiteral -Value $bakedPreservePath))
     (ConvertTo-DsmPsHereStringAssignment -Name 'DsmInlinePreserveRulesContent' -Value $inlinePreserveText)
@@ -795,8 +820,12 @@ foreach ($mvpSource in @($mvpDetectSource, $mvpRemediateSource)) {
     }
     else {
         $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpMaxDeletes' -Literal ([string][int]$RemediationMaxDeletes)
+        $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpBackupRetentionDays' -Literal ([string][int]$BackupRetentionDays)
         $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpRequireElevation' -Literal (ConvertTo-DsmPsBoolLiteral -Value $RemediationRequireElevation)
     }
+
+    $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpRestrictProgramDataAccess' `
+        -Literal (ConvertTo-DsmPsBoolLiteral -Value $RestrictProgramDataAccess)
 
     foreach ($mvpFilterName in @($mvpFilterVars.Keys)) {
         if (-not $resolvedFilters.ContainsKey($mvpFilterName)) { continue }

@@ -44,6 +44,8 @@ function Get-DsmAllowedSettingsKeyMap {
         BlocklistPath                 = 'path'
         OutputPath                    = 'path'
         BackupRoot                    = 'path'
+        BackupRetentionDays           = 'int'
+        RestrictProgramDataAccess     = 'bool'
         MaxDeletes                    = 'int'
         MicrosoftBlocklistMaxAgeDays  = 'int'
         SkipMicrosoftBlocklist        = 'bool'

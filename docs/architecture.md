@@ -140,7 +140,7 @@ pnputil /enum-drivers /files /devices /format csv
 
 ```text
 [RiskSignals contains OrphanCandidate] (operator-filtered)
-    → pnputil /export-driver <PublishedName> <BackupRoot>
+    → pnputil /export-driver <PublishedName> <BackupRoot>\<Class>\<original.inf>_<oem#.inf>
     → pnputil /delete-driver <PublishedName>   # no /force in default path
 ```
 
@@ -161,7 +161,7 @@ pnputil /enum-drivers /files /devices /format csv
 | **Dual host** | Module targets **PS 5.1+**; PS 7+ used for dev/audit |
 | **Intune delivery** | `Build-DsmIntuneScripts.ps1` merges sources → single detection + remediation `.ps1` |
 | **Version gates** | `Dsm.Runtime.ps1`: `Test-DsmIsPowerShellCore`, `Join-DsmPath`, `Set-DsmContentUtf8` |
-| **Endpoint state** | `%ProgramData%\DriverStoreManager\` (reports, backups) |
+| **Endpoint state** | `%ProgramData%\DriverStoreManager\` (reports, backups). Intune builds default to SYSTEM full control and Administrators modify. |
 
 See [intune-deployment.md](intune-deployment.md).
 

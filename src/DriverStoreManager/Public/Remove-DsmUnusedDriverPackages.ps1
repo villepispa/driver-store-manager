@@ -7,7 +7,11 @@ function Remove-DsmUnusedDriverPackages {
         preview mode unless -AllowDelete and -Confirm:$false are both set. Requires
         elevation for export/delete. Never uses pnputil /force. See docs/safety-gates.md.
     .PARAMETER BackupRoot
-        Directory for pnputil /export-driver backups (default: project backups/<timestamp>).
+        Directory for pnputil /export-driver backups (default: project backups).
+        Each package is backups\<Class>\<original.inf>_<oem#.inf>.
+    .PARAMETER BackupRetentionDays
+        Delete package backup folders older than this many days (default 30).
+        0 keeps every backup. Age is the folder creation time.
     .PARAMETER Filter
         Optional DsmDriverFilter (same as report scoped section).
     .PARAMETER PreserveRule
@@ -62,6 +66,9 @@ function Remove-DsmUnusedDriverPackages {
         [switch] $IncludeWindowsBuiltIn,
 
         [string] $BackupRoot,
+
+        [ValidateRange(0, 36500)]
+        [int] $BackupRetentionDays = 30,
 
         [string[]] $IncludePublishedName,
 
@@ -118,11 +125,13 @@ function Remove-DsmUnusedDriverPackages {
     if (-not $BackupRoot) {
         $moduleRoot = Split-Path -Parent $PSScriptRoot
         $projectRoot = Split-Path -Parent (Split-Path -Parent $moduleRoot)
-        $BackupRoot = Join-DsmPath $projectRoot 'backups' (Get-Date -Format 'yyyy-MM-dd_HHmmss')
+        $BackupRoot = Join-DsmPath $projectRoot 'backups'
     }
 
+    $expiredBackupCount = 0
     if ($performDelete) {
         New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
+        $expiredBackupCount = Remove-DsmOldDriverBackups -BackupRoot $BackupRoot -OlderThanDays $BackupRetentionDays
     }
 
     $candidates = @($plan.Candidates)
@@ -193,7 +202,18 @@ function Remove-DsmUnusedDriverPackages {
         }
 
         try {
-            $exportDir = Export-DsmDriverPackageBackup -PublishedName $name -BackupRoot $BackupRoot
+            $packageOriginalName = ''
+            $originalProp = $pkg.PSObject.Properties['OriginalName']
+            if ($null -ne $originalProp -and $null -ne $originalProp.Value) {
+                $packageOriginalName = [string]$originalProp.Value
+            }
+            $packageDriverClass = ''
+            $classProp = $pkg.PSObject.Properties['DriverClass']
+            if ($null -ne $classProp -and $null -ne $classProp.Value) {
+                $packageDriverClass = [string]$classProp.Value
+            }
+            $exportDir = Export-DsmDriverPackageBackup -PublishedName $name -BackupRoot $BackupRoot `
+                -OriginalName $packageOriginalName -DriverClass $packageDriverClass
             Remove-DsmDriverPackageFromStore -PublishedName $name
             $row = New-DsmCleanupResultRow -Package $pkg -FamilyContext $familyContext `
                 -Action 'Deleted' -BackupPath $exportDir
@@ -227,6 +247,8 @@ function Remove-DsmUnusedDriverPackages {
         OldVersionsOfInUseFamiliesCount = @($results | Where-Object { $_.IsOldVersionOfInUseFamily }).Count
         FilterManifest            = $plan.FilterManifest
         MaxDeletes                = $MaxDeletes
+        BackupRetentionDays       = $BackupRetentionDays
+        ExpiredBackupCount        = $expiredBackupCount
     }
 
     $output = [pscustomobject]@{

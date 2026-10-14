@@ -194,6 +194,7 @@ $previousState = $env:DSM_MVP_STATE_ROOT
 $env:DSM_MVP_STUB_PNPUTIL = '1'
 $env:DSM_MVP_FIXTURE_ROOT = $fixtureRoot
 $env:DSM_MVP_STATE_ROOT = $smokeRoot
+$env:DSM_MVP_SKIP_STATE_ACL = '1'
 try {
     $mvpPsi = New-Object System.Diagnostics.ProcessStartInfo
     $mvpPsi.FileName = (Get-Process -Id $PID).Path
@@ -216,6 +217,7 @@ finally {
     $env:DSM_MVP_STUB_PNPUTIL = $previousStub
     $env:DSM_MVP_FIXTURE_ROOT = $previousFixture
     $env:DSM_MVP_STATE_ROOT = $previousState
+    Remove-Item Env:DSM_MVP_SKIP_STATE_ACL -ErrorAction SilentlyContinue
 }
 
 Remove-Item -LiteralPath $smokeRoot -Recurse -Force -ErrorAction SilentlyContinue

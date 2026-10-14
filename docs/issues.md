@@ -17,6 +17,53 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (2026-10-14 — 0.14.0 — DSM-049)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-049 | ProgramData state is readable by signed-in users | `Set-DsmRestrictedDirectoryAcl`; MVP remediate and detect; `DSM-VALIDATE-OK` |
+
+### DSM-049 — ProgramData state is readable by signed-in users
+
+- **Status:** Resolved
+- **Severity:** Medium
+- **Area:** Intune
+- **Impact:** `%ProgramData%\DriverStoreManager` inherits the default ProgramData access list. A signed-in user can read exported drivers, including files that may be vulnerable.
+- **Remediation:** `-RestrictProgramDataAccess` (default on for Intune builds and the MVP) grants SYSTEM full control and Administrators modify, and removes every other entry on that folder and its children. An elevated run also sets the owner to Administrators. `false` keeps the inherited ProgramData permissions.
+- **Evidence:** `DSM-VALIDATE-OK`. Pester 120. Lint 0/33. PS 5.1 smoke. `DSM-BUILD-OK detectBytes=211502 remediateBytes=207660 mvpDetectLines=641 mvpRemediateLines=798`.
+- **Plan:** [plans/2026-10-14_dsm-049-restrict-programdata_c3f8a91d.plan.md](../plans/2026-10-14_dsm-049-restrict-programdata_c3f8a91d.plan.md)
+
+## Resolved issues (2026-10-14 — 0.14.0 — DSM-048)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-048 | Backups are not grouped by class and never age out | `Dsm.Cleanup.ps1`; MVP remediate; `DSM-VALIDATE-OK` |
+
+### DSM-048 — Backups are not grouped by class and never age out
+
+- **Status:** Resolved
+- **Severity:** Medium
+- **Area:** Cleanup
+- **Impact:** Each delete run created a new timestamp folder, so hundreds of removed drivers did not sit together by class. Display-driver exports can grow to tens of gigabytes with no retention.
+- **Remediation:** Store `backups\<Class>\<original.inf>_<oem#.inf>`. When the original name is unknown, the only INF in the export supplies it. Delete backups older than `BackupRetentionDays` (default 30; 0 keeps them) in the module and the enterprise MVP.
+- **Evidence:** `DSM-VALIDATE-OK`. Pester 118. Lint 0/33. PS 5.1 smoke. MVP remediate 733 lines. `DSM-BUILD-OK detectBytes=207409 remediateBytes=203619 mvpDetectLines=572 mvpRemediateLines=733`.
+- **Plan:** [plans/2026-10-14_dsm-048-backup-class-retention_a8c3e1f2.plan.md](../plans/2026-10-14_dsm-048-backup-class-retention_a8c3e1f2.plan.md)
+
+## Resolved issues (2026-10-14 — 0.14.0 — DSM-047)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-047 | Backup folders were only the published oem name | `Get-DsmDriverBackupFolderName`; MVP remediate log |
+
+### DSM-047 — Backup folders were only the published oem name
+
+- **Status:** Resolved
+- **Severity:** Low
+- **Area:** Cleanup
+- **Impact:** Export folders named `oem123.inf` do not show which driver was saved, and related packages do not sort together.
+- **Remediation:** The child folder is `<original.inf>_<oem#.inf>`. Illegal file-name characters become `_`. A missing original name keeps the published name.
+- **Evidence:** `DriverStoreManager.CleanupMocks.Tests.ps1` folder-name case; `Dsm.IntuneMvp.Tests.ps1` export log contains `orphan.inf_oem9.inf`. `DSM-PESTER-OK passed=14` for those two files.
+
 ## Resolved issues (2026-10-14 — 0.13.0 — DSM-046)
 
 | ID | Summary | Evidence |
@@ -320,6 +367,10 @@ rebuilt `dist/intune/*.ps1`.
 ## Activity
 
 <!-- ISSUES-ACTIVITY+ -->
+- **2026-10-14 21:24:00** — Cut **0.14.0** (`DSM-047`, `DSM-048`, `DSM-049`): class backup folders, retention, and ProgramData access.
+- **2026-10-14 16:52:39** — Resolved `DSM-049`: `%ProgramData%\DriverStoreManager` is limited to SYSTEM full control and Administrators modify, in the module, both Intune entries, and the MVP. `DSM-VALIDATE-OK` (Pester 120, lint 0/33, PS 5.1 smoke).
+- **2026-10-14 16:15:37** — Resolved `DSM-048`: backups are `backups\<Class>\<original.inf>_<oem#.inf>`, unknown names come from the exported INF, and folders older than `BackupRetentionDays` (default 30) are deleted. `DSM-VALIDATE-OK` (Pester 118, lint 0/33, PS 5.1 smoke).
+- **2026-10-14 15:37:23** — Resolved backup folder naming: `<original.inf>_<oem#.inf>` for module cleanup and the MVP remediate script. Cleanup and MVP Pester 14/14.
 - **2026-10-14 10:37:59** — Resolved `DSM-046`: Intune MVP copies honor supported build switches and settings files. `DSM-VALIDATE-OK` (Pester 114, lint 0/33, PS 5.1 smoke).
 - **2026-10-13 22:48:47** — Resolved `DSM-045`: enterprise Intune MVP, 561 + 635 lines. `DSM-VALIDATE-OK` (Pester 112, lint 0/33, PS 5.1 smoke).
 - **2026-10-13 22:11:00** — Filed `DSM-045` (medium, in progress): enterprise Intune MVP, standalone detect and remediate. Plan `plans/2026-10-13_dsm-045-intune-mvp_c8e14b2a.plan.md`.

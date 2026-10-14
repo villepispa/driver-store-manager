@@ -24,6 +24,7 @@ $DsmIncludePublishedName = $null
 $DsmInventoryMaxAgeMinutes = $null
 $DsmIncludeDism = $null
 $DsmShowEffectiveSettings = $null
+$DsmRestrictProgramDataAccess = $true
 # endregion DSM_BUILD_CONFIG
 
 if ($DsmInlineBlocklistContent) {
@@ -168,4 +169,13 @@ try {
 catch {
     Write-Error $_
     exit 2
+}
+finally {
+    if ($DsmRestrictProgramDataAccess) {
+        $protectedRoot = Get-DsmProgramDataRoot
+        if (-not (Test-Path -LiteralPath $protectedRoot)) {
+            New-Item -ItemType Directory -Path $protectedRoot -Force | Out-Null
+        }
+        Set-DsmRestrictedDirectoryAcl -LiteralPath $protectedRoot
+    }
 }

@@ -159,3 +159,98 @@ function Get-DsmProgramDataRoot {
 
     return (Join-DsmPath @segments)
 }
+
+function Set-DsmRestrictedItemAcl {
+    <#
+    .SYNOPSIS
+        Replaces one file or directory access list with SYSTEM full and Administrators modify.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $LiteralPath,
+
+        [switch] $Directory
+    )
+
+    $system = New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-18'
+    $admins = New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-32-544'
+    $allow = [System.Security.AccessControl.AccessControlType]::Allow
+    $acl = Get-Acl -LiteralPath $LiteralPath
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($rule in @($acl.Access)) {
+        try {
+            [void]$acl.RemoveAccessRule($rule)
+        }
+        catch {
+            Write-Verbose $_.Exception.Message
+        }
+    }
+
+    if ($Directory) {
+        $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+        $propagate = [System.Security.AccessControl.PropagationFlags]::None
+        $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                    $system, 'FullControl', $inherit, $propagate, $allow)))
+        $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                    $admins, 'Modify', $inherit, $propagate, $allow)))
+    }
+    else {
+        $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                    $system, 'FullControl', $allow)))
+        $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                    $admins, 'Modify', $allow)))
+    }
+
+    Set-Acl -LiteralPath $LiteralPath -AclObject $acl
+    $winIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $winPrincipal = New-Object Security.Principal.WindowsPrincipal $winIdentity
+    if ($winPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        try {
+            $owned = Get-Acl -LiteralPath $LiteralPath
+            $owned.SetOwner($admins)
+            Set-Acl -LiteralPath $LiteralPath -AclObject $owned
+        }
+        catch {
+            Write-Verbose $_.Exception.Message
+        }
+    }
+}
+
+function Set-DsmRestrictedDirectoryAcl {
+    <#
+    .SYNOPSIS
+        Limits a directory tree to SYSTEM full control and Administrators modify.
+    .DESCRIPTION
+        Removes inherited access, including the default ProgramData entries for
+        signed-in users. Existing subfolders and files are rewritten. New
+        children inherit the directory entries.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $LiteralPath
+    )
+
+    if (-not (Test-Path -LiteralPath $LiteralPath)) {
+        New-Item -ItemType Directory -Path $LiteralPath -Force | Out-Null
+    }
+
+    $root = Get-Item -LiteralPath $LiteralPath -Force
+    if (-not $root.PSIsContainer) {
+        throw "Restricted ACL target must be a directory: $LiteralPath"
+    }
+
+    $files = @(Get-ChildItem -LiteralPath $root.FullName -Recurse -Force -File -ErrorAction SilentlyContinue)
+    foreach ($file in $files) {
+        Set-DsmRestrictedItemAcl -LiteralPath $file.FullName
+    }
+
+    $directories = @(Get-ChildItem -LiteralPath $root.FullName -Recurse -Force -Directory -ErrorAction SilentlyContinue)
+    $orderedDirs = @($directories | Sort-Object { $_.FullName.Length } -Descending)
+    foreach ($dir in $orderedDirs) {
+        Set-DsmRestrictedItemAcl -LiteralPath $dir.FullName -Directory
+    }
+
+    Set-DsmRestrictedItemAcl -LiteralPath $root.FullName -Directory
+}

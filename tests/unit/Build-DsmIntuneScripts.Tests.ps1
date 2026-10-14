@@ -31,6 +31,8 @@ Describe 'Build-DsmIntuneScripts configuration' {
         $detect.Contains('function Set-DsmCallerSettingsOverlay') | Should-Be $true
         $detect.Contains('#region DSM source: Private/Dsm.Settings.ps1') | Should-Be $true
         $remediate.Contains("`$DsmRemediationMaxDeletes = 10") | Should-Be $true
+        $remediate.Contains("`$DsmBackupRetentionDays = 30") | Should-Be $true
+        $remediate.Contains("`$DsmRestrictProgramDataAccess = `$true") | Should-Be $true
         $remediate.Contains("`$DsmPreserveRulesPath = `$null") | Should-Be $true
         $remediate.Contains('function Set-DsmCallerSettingsOverlay') | Should-Be $true
         Test-Path -LiteralPath (Join-Path $outDir 'mvp\Detect-DsmDriverStoreCompliance.ps1') | Should-Be $true
@@ -192,6 +194,8 @@ Describe 'Build-DsmIntuneScripts configuration' {
   "PreserveRulesPath": "preserve-rules.json",
   "BlocklistPath": "blocklist-hashes.txt",
   "MaxDeletes": 4,
+  "BackupRetentionDays": 14,
+  "RestrictProgramDataAccess": false,
   "MicrosoftBlocklistMaxAgeDays": 3,
   "IncludeWindowsBuiltIn": false,
   "IncludeCleanupPreview": true,
@@ -216,6 +220,8 @@ Describe 'Build-DsmIntuneScripts configuration' {
         $config.Contains('IncludeWindowsBuiltIn') | Should-Be $false
         $remediate.Contains("DriverClass = @('Printer')") | Should-Be $true
         $remediate.Contains("`$DsmRemediationMaxDeletes = 4") | Should-Be $true
+        $remediate.Contains("`$DsmBackupRetentionDays = 14") | Should-Be $true
+        $remediate.Contains("`$DsmRestrictProgramDataAccess = `$false") | Should-Be $true
         $remediate.Contains('Site printers') | Should-Be $true
         $remediate.Contains($hash) | Should-Be $false
     }

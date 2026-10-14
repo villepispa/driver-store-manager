@@ -14,6 +14,7 @@
 
   Test seams (unset on Intune devices): DSM_MVP_STUB_PNPUTIL=1 reads CSV
   fixtures from DSM_MVP_FIXTURE_ROOT. DSM_MVP_STATE_ROOT replaces ProgramData.
+  DSM_MVP_SKIP_STATE_ACL=1 leaves the state-folder access list unchanged.
   A stub without fixtures exits 2.
 
 .EXAMPLE
@@ -34,6 +35,7 @@ $ErrorActionPreference = 'Stop'
 #section Config
 $MvpOrphanThreshold = 1
 $MvpDetectOrphanCandidates = $true
+$MvpRestrictProgramDataAccess = $true
 $MvpFilterDriverClass = @()
 $MvpFilterProvider = @()
 $MvpFilterPublishedName = @()
@@ -530,6 +532,66 @@ try {
         [void]$deletable.Add($pkg)
     }
 
+    function Set-MvpRestrictedItemAcl {
+        param(
+            [Parameter(Mandatory)]
+            [string] $LiteralPath,
+            [switch] $Directory
+        )
+        $system = New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-18'
+        $admins = New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-32-544'
+        $allow = [System.Security.AccessControl.AccessControlType]::Allow
+        $acl = Get-Acl -LiteralPath $LiteralPath
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($rule in @($acl.Access)) {
+            try { [void]$acl.RemoveAccessRule($rule) }
+            catch { Write-Verbose $_.Exception.Message }
+        }
+        if ($Directory) {
+            $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+            $propagate = [System.Security.AccessControl.PropagationFlags]::None
+            $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                        $system, 'FullControl', $inherit, $propagate, $allow)))
+            $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                        $admins, 'Modify', $inherit, $propagate, $allow)))
+        }
+        else {
+            $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                        $system, 'FullControl', $allow)))
+            $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                        $admins, 'Modify', $allow)))
+        }
+        Set-Acl -LiteralPath $LiteralPath -AclObject $acl
+        $winIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $winPrincipal = New-Object Security.Principal.WindowsPrincipal $winIdentity
+        if ($winPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            try {
+                $owned = Get-Acl -LiteralPath $LiteralPath
+                $owned.SetOwner($admins)
+                Set-Acl -LiteralPath $LiteralPath -AclObject $owned
+            }
+            catch { Write-Verbose $_.Exception.Message }
+        }
+    }
+
+    function Set-MvpRestrictedDirectoryAcl {
+        param([Parameter(Mandatory)] [string] $LiteralPath)
+        if (-not (Test-Path -LiteralPath $LiteralPath)) {
+            New-Item -ItemType Directory -Path $LiteralPath -Force | Out-Null
+        }
+        $rootItem = Get-Item -LiteralPath $LiteralPath -Force
+        $files = @(Get-ChildItem -LiteralPath $rootItem.FullName -Recurse -Force -File -ErrorAction SilentlyContinue)
+        foreach ($file in $files) {
+            Set-MvpRestrictedItemAcl -LiteralPath $file.FullName
+        }
+        $directories = @(Get-ChildItem -LiteralPath $rootItem.FullName -Recurse -Force -Directory -ErrorAction SilentlyContinue)
+        $orderedDirs = @($directories | Sort-Object { $_.FullName.Length } -Descending)
+        foreach ($dir in $orderedDirs) {
+            Set-MvpRestrictedItemAcl -LiteralPath $dir.FullName -Directory
+        }
+        Set-MvpRestrictedItemAcl -LiteralPath $rootItem.FullName -Directory
+    }
+
     #section Report
     $stateRoot = $env:DSM_MVP_STATE_ROOT
     if ([string]::IsNullOrWhiteSpace($stateRoot)) {
@@ -559,6 +621,13 @@ try {
     }
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
     [System.IO.File]::WriteAllText($reportPath, ($report | ConvertTo-Json -Depth 4), $utf8NoBom)
+    if ($MvpRestrictProgramDataAccess -and $env:DSM_MVP_SKIP_STATE_ACL -ne '1') {
+        $protectedRoot = $env:DSM_MVP_STATE_ROOT
+        if ([string]::IsNullOrWhiteSpace($protectedRoot)) {
+            $protectedRoot = Join-Path $env:ProgramData 'DriverStoreManager'
+        }
+        Set-MvpRestrictedDirectoryAcl -LiteralPath $protectedRoot
+    }
     Write-Host ("DSM-MVP-DETECT deletable={0} file={1}" -f $deletable.Count, $reportPath)
 
     #section Compliance gate

@@ -165,8 +165,20 @@ max `$DsmRemediationMaxDeletes` (default 10) per run. Does not use `pnputil /for
   reports\intune-detection\driver-store-report_*.md
   reports\intune-detection\driver-store-filtered_*.csv
   reports\intune-remediation\remediation-summary_*.json
-  backups\<timestamp>\<oem#.inf>\
+  backups\<Class>\<original.inf>_<oem#.inf>\
 ```
+
+The class folder keeps every export of that class together. The child folder
+is the original INF name, then the published `oem#.inf` name. When inventory
+has no original name, the only `.inf` in the export supplies it. A missing
+class uses `Unknown`. Package folders older than `BackupRetentionDays`
+(default 30; `0` keeps them) are deleted at the start of a delete run, including
+older `backups\<timestamp>\` trees from earlier versions.
+
+`RestrictProgramDataAccess` (default on) replaces the access list on
+`%ProgramData%\DriverStoreManager` and everything under it. SYSTEM has full
+control. Administrators have modify. Signed-in users have no access. Set it
+to `false` to keep the inherited ProgramData permissions.
 
 `driver-store-filtered_*.csv` is written only when a filter such as `DriverClass`
 is active. Detection also prints `DSM-FILTERED-DRIVERS count=N file=<path>`
@@ -255,7 +267,11 @@ ignored it.
 
 Detection exits `1` when deletable `NeverAssociated` packages reach
 `$MvpOrphanThreshold` (default 1) and orphan detection is on. Remediation
-exports, then deletes at most `$MvpMaxDeletes` (default 10). It never passes
+exports, then deletes at most `$MvpMaxDeletes` (default 10). It stores those
+exports under `backups\<Class>\` and deletes folders older than
+`$MvpBackupRetentionDays` (default 30). It limits
+`%ProgramData%\DriverStoreManager` to SYSTEM and Administrators when
+`$MvpRestrictProgramDataAccess` is true (the default). It never passes
 `pnputil /force`. Connected and disconnected-installed packages are not
 deleted. The default preserve rules match
 `examples/preserve-rules.example.json`. A device-correlation failure exits `2`

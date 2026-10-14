@@ -6,6 +6,8 @@
   "PreserveRulesPath": "preserve-rules.example.json",
   "BlocklistPath": "blocklist-hashes.example.txt",
   "MaxDeletes": 10,
+  "BackupRetentionDays": 30,
+  "RestrictProgramDataAccess": true,
   "MicrosoftBlocklistMaxAgeDays": 7,
   "SkipMicrosoftBlocklist": false,
   "IncludeWindowsBuiltIn": false,

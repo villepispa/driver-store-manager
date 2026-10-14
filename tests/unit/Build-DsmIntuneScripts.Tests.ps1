@@ -33,6 +33,8 @@ Describe 'Build-DsmIntuneScripts configuration' {
         $remediate.Contains("`$DsmRemediationMaxDeletes = 10") | Should-Be $true
         $remediate.Contains("`$DsmPreserveRulesPath = `$null") | Should-Be $true
         $remediate.Contains('function Set-DsmCallerSettingsOverlay') | Should-Be $true
+        Test-Path -LiteralPath (Join-Path $outDir 'mvp\Detect-DsmDriverStoreCompliance.ps1') | Should-Be $true
+        Test-Path -LiteralPath (Join-Path $outDir 'mvp\Remediate-DsmDriverStore.ps1') | Should-Be $true
     }
 
     It 'Private bundle order matches DriverStoreManager.psm1 privateFiles' {

@@ -231,6 +231,24 @@ Compliance checks (detection script):
 
 All metrics come from `Get-DsmDriverStoreReport` — same schema as `Invoke-DsmDriverStoreAudit.ps1`.
 
+## Enterprise MVP
+
+`scripts/intune/mvp/Detect-DsmDriverStoreCompliance.ps1` and
+`Remediate-DsmDriverStore.ps1` are a second upload pair for reviewers who
+should not have to walk the full module. `Build-DsmIntuneScripts.ps1` copies
+them to `dist/intune/mvp/`. They are not a merge of `src/`.
+
+Each file reads from `#section Config` downward. Detection exits `1` when
+deletable `NeverAssociated` packages reach `$MvpOrphanThreshold` (default 1).
+Remediation exports, then deletes at most `$MvpMaxDeletes` (default 10).
+It never passes `pnputil /force`. Connected and disconnected-installed
+packages are not deleted. Preserve rules in that config section match
+`examples/preserve-rules.example.json`. A device-correlation failure exits `2`
+and does not treat packages as orphans.
+
+Change policy in `#section Config`, then rebuild. The full bundles remain the
+path that includes the Microsoft blocklist, signature signals, and DiskId catalog.
+
 ## Related
 
 - [safety-gates.md](safety-gates.md) — deletion gates

@@ -173,6 +173,51 @@ foreach ($bundlePath in @($detectBundle, $remediateBundle)) {
     }
 }
 
+$mvpDetect = Join-Path $projectRoot 'dist\intune\mvp\Detect-DsmDriverStoreCompliance.ps1'
+$mvpRemediate = Join-Path $projectRoot 'dist\intune\mvp\Remediate-DsmDriverStore.ps1'
+foreach ($mvpPath in @($mvpDetect, $mvpRemediate)) {
+    $mvpName = Split-Path -Leaf $mvpPath
+    Test-SmokeAssert -Condition (Test-Path -LiteralPath $mvpPath) `
+        -Name "MVP exists ($mvpName)" -Detail $mvpPath
+    if (Test-Path -LiteralPath $mvpPath) {
+        $mvpText = Get-Content -LiteralPath $mvpPath -Raw
+        Test-SmokeAssert -Condition ($mvpText -match '#section Config') `
+            -Name "MVP section ($mvpName)" -Detail 'Missing #section Config'
+        Test-SmokeAssert -Condition ($mvpText -notmatch '''/force''') `
+            -Name "MVP no force switch ($mvpName)" -Detail 'Found a force argument'
+    }
+}
+
+$previousStub = $env:DSM_MVP_STUB_PNPUTIL
+$previousFixture = $env:DSM_MVP_FIXTURE_ROOT
+$previousState = $env:DSM_MVP_STATE_ROOT
+$env:DSM_MVP_STUB_PNPUTIL = '1'
+$env:DSM_MVP_FIXTURE_ROOT = $fixtureRoot
+$env:DSM_MVP_STATE_ROOT = $smokeRoot
+try {
+    $mvpPsi = New-Object System.Diagnostics.ProcessStartInfo
+    $mvpPsi.FileName = (Get-Process -Id $PID).Path
+    $mvpPsi.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $mvpDetect + '"'
+    $mvpPsi.UseShellExecute = $false
+    $mvpPsi.RedirectStandardOutput = $true
+    $mvpPsi.RedirectStandardError = $true
+    $mvpPsi.CreateNoWindow = $true
+    $mvpProc = [System.Diagnostics.Process]::Start($mvpPsi)
+    $mvpOutTask = $mvpProc.StandardOutput.ReadToEndAsync()
+    $mvpErrTask = $mvpProc.StandardError.ReadToEndAsync()
+    [void]$mvpProc.WaitForExit()
+    [void]$mvpOutTask.Wait()
+    [void]$mvpErrTask.Wait()
+    Test-SmokeAssert -Condition ($mvpProc.ExitCode -eq 0) `
+        -Name 'MVP detect fixture compliant' `
+        -Detail ("exit={0} {1}" -f $mvpProc.ExitCode, $mvpErrTask.Result)
+}
+finally {
+    $env:DSM_MVP_STUB_PNPUTIL = $previousStub
+    $env:DSM_MVP_FIXTURE_ROOT = $previousFixture
+    $env:DSM_MVP_STATE_ROOT = $previousState
+}
+
 Remove-Item -LiteralPath $smokeRoot -Recurse -Force -ErrorAction SilentlyContinue
 
 if ($failures.Count -gt 0) {

@@ -8,6 +8,7 @@
 
   Concatenates Private and Public sources per bundle-order.json, appends entry templates,
   and emits Detect-DsmDriverStoreCompliance.ps1 and Remediate-DsmDriverStore.ps1.
+  Also copies the enterprise MVP scripts from scripts/intune/mvp into dist/intune/mvp.
   Bakes detect/remediate knobs from parameters (Intune Detection and Remediation
   cannot take runtime parameters). Configuration files may be on-endpoint paths
   or inlined into the generated scripts (blocklist → Detection; preserve rules →
@@ -706,6 +707,22 @@ $remediatePath = New-DsmStandaloneScript -ScriptType 'Remediation' `
     -BundleBody $bundleBody `
     -ConfigBody $remediateConfig
 
+$mvpSourceDir = Join-Path $PSScriptRoot 'intune\mvp'
+$mvpOutDir = Join-Path $OutputDirectory 'mvp'
+if (-not (Test-Path -LiteralPath $mvpOutDir)) {
+    New-Item -ItemType Directory -Path $mvpOutDir -Force | Out-Null
+}
+$mvpDetectSource = Join-Path $mvpSourceDir 'Detect-DsmDriverStoreCompliance.ps1'
+$mvpRemediateSource = Join-Path $mvpSourceDir 'Remediate-DsmDriverStore.ps1'
+foreach ($mvpSource in @($mvpDetectSource, $mvpRemediateSource)) {
+    if (-not (Test-Path -LiteralPath $mvpSource)) {
+        throw "MVP source missing: $mvpSource"
+    }
+    Copy-Item -LiteralPath $mvpSource -Destination (Join-Path $mvpOutDir (Split-Path -Leaf $mvpSource)) -Force
+}
+$mvpDetectLines = @((Get-Content -LiteralPath $mvpDetectSource)).Count
+$mvpRemediateLines = @((Get-Content -LiteralPath $mvpRemediateSource)).Count
+
 $detectSize = (Get-Item -LiteralPath $detectPath).Length
 $remediateSize = (Get-Item -LiteralPath $remediatePath).Length
 
@@ -743,6 +760,6 @@ Write-Host 'Upload both scripts to Intune Proactive Remediation (64-bit, run as 
 Write-Host 'See docs/intune-deployment.md for exit codes and pilot guidance.' -ForegroundColor Cyan
 
 if ($AgentSummary) {
-    Write-Output ("DSM-BUILD-OK detectBytes={0} remediateBytes={1} sources={2} config={3}" -f `
-        $detectSize, $remediateSize, @($manifest.sources).Count, $configLabel)
+    Write-Output ("DSM-BUILD-OK detectBytes={0} remediateBytes={1} sources={2} config={3} mvpDetectLines={4} mvpRemediateLines={5}" -f `
+        $detectSize, $remediateSize, @($manifest.sources).Count, $configLabel, $mvpDetectLines, $mvpRemediateLines)
 }

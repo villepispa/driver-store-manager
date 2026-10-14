@@ -7,7 +7,22 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.11.0**._
+_Nothing queued — latest release: **0.12.0**._
+
+## [0.12.0] — 2026-10-14
+
+### Added
+
+- **DSM-045:** Enterprise Intune MVP. Two standalone detect and remediate
+  scripts under `scripts/intune/mvp/` inventory `oem*.inf` packages, apply
+  preserve rules, and delete a capped set of `NeverAssociated` orphans.
+  The Intune build copies them to `dist/intune/mvp/`. Blocklist, signature,
+  and DiskId stay in the full module.
+
+### Changed
+
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.12.0` for this
+  release.
 
 ## [0.11.0] — 2026-10-13
 

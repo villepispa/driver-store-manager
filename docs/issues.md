@@ -17,6 +17,11 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (2026-10-14 — 0.14.1)
+
+No new `DSM-` id. ACL tests pass on an elevated host and on Windows
+PowerShell 5.1. `ModuleVersion` `0.14.1`.
+
 ## Resolved issues (2026-10-14 — 0.14.0 — DSM-049)
 
 | ID | Summary | Evidence |
@@ -367,6 +372,7 @@ rebuilt `dist/intune/*.ps1`.
 ## Activity
 
 <!-- ISSUES-ACTIVITY+ -->
+- **2026-10-16 15:24:00** — Register heading for **0.14.1** (ACL tests; no new `DSM-` id). Changelog `0.14.0` cites **DSM-047**.
 - **2026-10-14 21:40:00** — Cut **0.14.1**: ACL tests pass on an elevated host and on Windows PowerShell 5.1.
 - **2026-10-14 21:24:00** — Cut **0.14.0** (`DSM-047`, `DSM-048`, `DSM-049`): class backup folders, retention, and ProgramData access.
 - **2026-10-14 16:52:39** — Resolved `DSM-049`: `%ProgramData%\DriverStoreManager` is limited to SYSTEM full control and Administrators modify, in the module, both Intune entries, and the MVP. `DSM-VALIDATE-OK` (Pester 120, lint 0/33, PS 5.1 smoke).

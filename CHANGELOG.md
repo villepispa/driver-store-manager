@@ -23,7 +23,7 @@ _Nothing queued — latest release: **0.14.1**._
 
 ### Changed
 
-- **Backup folder name** — export-before-delete stores each package as
+- **DSM-047:** Backup folder name — export-before-delete stores each package as
   `<original.inf>_<oem#.inf>` (for example `iigd_dch.inf_oem123.inf`) so the
   same original driver sorts together. A missing original name keeps
   `<oem#.inf>` only. Applies to the module cleanup and the enterprise MVP

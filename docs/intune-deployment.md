@@ -180,6 +180,11 @@ older `backups\<timestamp>\` trees from earlier versions.
 control. Administrators have modify. Signed-in users have no access. Set it
 to `false` to keep the inherited ProgramData permissions.
 
+`DriverFolderMinAgeDays` (Intune default 14; `0` keeps every age) leaves a
+driver-store folder in place until it is older than that many days. Detection
+counts only those older folders, so a recent previous driver is not reported
+as something to remove.
+
 `driver-store-filtered_*.csv` is written only when a filter such as `DriverClass`
 is active. Detection also prints `DSM-FILTERED-DRIVERS count=N file=<path>`
 so the Intune log points at that CSV. The JSON report still contains the full
@@ -271,7 +276,10 @@ exports, then deletes at most `$MvpMaxDeletes` (default 10). It stores those
 exports under `backups\<Class>\` and deletes folders older than
 `$MvpBackupRetentionDays` (default 30). It limits
 `%ProgramData%\DriverStoreManager` to SYSTEM and Administrators when
-`$MvpRestrictProgramDataAccess` is true (the default). It never passes
+`$MvpRestrictProgramDataAccess` is true (the default). A published INF newer
+than `$MvpDriverFolderMinAgeDays` stays in the store (Intune builds use 14;
+`0` keeps every age). A package with no INF file is not deleted when that
+age is greater than zero. It never passes
 `pnputil /force`. Connected and disconnected-installed packages are not
 deleted. The default preserve rules match
 `examples/preserve-rules.example.json`. A device-correlation failure exits `2`

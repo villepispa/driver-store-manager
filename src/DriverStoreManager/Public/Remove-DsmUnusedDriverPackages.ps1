@@ -10,8 +10,11 @@ function Remove-DsmUnusedDriverPackages {
         Directory for pnputil /export-driver backups (default: project backups).
         Each package is backups\<Class>\<original.inf>_<oem#.inf>.
     .PARAMETER BackupRetentionDays
-        Delete package backup folders older than this many days (default 30).
-        0 keeps every backup. Age is the folder creation time.
+        Delete backup folders older than this many days. 0 keeps every backup.
+        Age is the folder creation time.
+    .PARAMETER DriverFolderMinAgeDays
+        Clean up a driver store folder only when it is older than this many days.
+        0 keeps every age. A missing folder is not cleaned up.
     .PARAMETER Filter
         Optional DsmDriverFilter (same as report scoped section).
     .PARAMETER PreserveRule
@@ -86,7 +89,10 @@ function Remove-DsmUnusedDriverPackages {
 
         [string] $SettingsPath,
 
-        [switch] $ShowEffectiveSettings
+        [switch] $ShowEffectiveSettings,
+
+        [ValidateRange(0, 36500)]
+        [int] $DriverFolderMinAgeDays = 0
     )
 
     $null = Set-DsmCallerSettingsOverlay -BoundParameters $PSBoundParameters
@@ -107,6 +113,7 @@ function Remove-DsmUnusedDriverPackages {
         PreserveRulesPath      = $PreserveRulesPath
         IncludePublishedName   = $IncludePublishedName
         InventoryMaxAgeMinutes = $InventoryMaxAgeMinutes
+        DriverFolderMinAgeDays = $DriverFolderMinAgeDays
     }
     if ($Provider) { $planParams['Provider'] = $Provider }
     if ($DeviceName) { $planParams['DeviceName'] = $DeviceName }
@@ -248,6 +255,7 @@ function Remove-DsmUnusedDriverPackages {
         FilterManifest            = $plan.FilterManifest
         MaxDeletes                = $MaxDeletes
         BackupRetentionDays       = $BackupRetentionDays
+        DriverFolderMinAgeDays    = $DriverFolderMinAgeDays
         ExpiredBackupCount        = $expiredBackupCount
     }
 

@@ -140,6 +140,7 @@ pnputil /enum-drivers /files /devices /format csv
 
 ```text
 [RiskSignals contains OrphanCandidate] (operator-filtered)
+    → FileRepository folder older than DriverFolderMinAgeDays (0 keeps every age)
     → pnputil /export-driver <PublishedName> <BackupRoot>\<Class>\<original.inf>_<oem#.inf>
     → pnputil /delete-driver <PublishedName>   # no /force in default path
 ```

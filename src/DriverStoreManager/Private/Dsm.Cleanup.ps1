@@ -87,7 +87,10 @@ function Get-DsmDriverStoreCleanupPlan {
 
         [string[]] $IncludePublishedName,
 
-        [int] $InventoryMaxAgeMinutes = 15
+        [int] $InventoryMaxAgeMinutes = 15,
+
+        [ValidateRange(0, 36500)]
+        [int] $DriverFolderMinAgeDays = 0
     )
 
     if (-not $Inventory) {
@@ -149,7 +152,10 @@ function Get-DsmDriverStoreCleanupPlan {
     $preservedSkipped = @($scoped | Where-Object {
             [bool](Get-DsmObjectPropertyValue -Object $_ -Name 'Preserved')
         })
-    $deletable = @($scoped | Where-Object { Test-DsmPackageIsDeletableCandidate -Package $_ })
+    $deletable = @($scoped | Where-Object {
+            (Test-DsmPackageIsDeletableCandidate -Package $_) -and
+            (Test-DsmDriverFolderIsOldEnough -Package $_ -MinAgeDays $DriverFolderMinAgeDays)
+        })
     $notDeletableInScope = @($scoped | Where-Object {
             -not [bool](Get-DsmObjectPropertyValue -Object $_ -Name 'Preserved') `
                 -and -not (Test-DsmPackageIsDeletableCandidate -Package $_)

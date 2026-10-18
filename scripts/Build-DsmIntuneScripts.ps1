@@ -51,6 +51,11 @@
 .PARAMETER BackupRetentionDays
   Baked `$DsmBackupRetentionDays` and the enterprise MVP `$MvpBackupRetentionDays`
   (default 30). 0 keeps every backup.
+.PARAMETER DriverFolderMinAgeDays
+  Baked `$DsmDriverFolderMinAgeDays` and the enterprise MVP
+  `$MvpDriverFolderMinAgeDays` (default 14). Only driver folders older than
+  this many days are cleanup candidates. 0 keeps every age.
+  (default 30). 0 keeps every backup.
 
 .PARAMETER RestrictProgramDataAccess
   Baked `$DsmRestrictProgramDataAccess` and the enterprise MVP
@@ -206,6 +211,9 @@ param(
 
     [ValidateRange(0, 36500)]
     [int] $BackupRetentionDays = 30,
+
+    [ValidateRange(0, 36500)]
+    [int] $DriverFolderMinAgeDays = 14,
 
     [bool] $RestrictProgramDataAccess = $true,
 
@@ -544,6 +552,9 @@ IncludeWindowsBuiltIn cannot be enabled for Intune. Inbox driver manifests stay 
     if (-not $PSBoundParameters.ContainsKey('BackupRetentionDays') -and $fromFile.Contains('BackupRetentionDays')) {
         $BackupRetentionDays = [int]$fromFile['BackupRetentionDays']
     }
+    if (-not $PSBoundParameters.ContainsKey('DriverFolderMinAgeDays') -and $fromFile.Contains('DriverFolderMinAgeDays')) {
+        $DriverFolderMinAgeDays = [int]$fromFile['DriverFolderMinAgeDays']
+    }
 
     if (-not $PSBoundParameters.ContainsKey('RestrictProgramDataAccess') -and $fromFile.Contains('RestrictProgramDataAccess')) {
         $RestrictProgramDataAccess = [bool]$fromFile['RestrictProgramDataAccess']
@@ -691,6 +702,7 @@ $sharedProfile = @(
     ('$DsmIncludeDism = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $includeDismValue))
     ('$DsmShowEffectiveSettings = {0}' -f (ConvertTo-DsmPsOptionalBoolLiteral -Value $showSettings))
     ('$DsmRestrictProgramDataAccess = {0}' -f (ConvertTo-DsmPsBoolLiteral -Value $RestrictProgramDataAccess))
+    ('$DsmDriverFolderMinAgeDays = {0}' -f $DriverFolderMinAgeDays)
 )
 
 $detectConfig = @(
@@ -826,6 +838,8 @@ foreach ($mvpSource in @($mvpDetectSource, $mvpRemediateSource)) {
 
     $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpRestrictProgramDataAccess' `
         -Literal (ConvertTo-DsmPsBoolLiteral -Value $RestrictProgramDataAccess)
+    $mvpText = Set-DsmMvpAssignment -Text $mvpText -VariableName 'MvpDriverFolderMinAgeDays' `
+        -Literal ([string][int]$DriverFolderMinAgeDays)
 
     foreach ($mvpFilterName in @($mvpFilterVars.Keys)) {
         if (-not $resolvedFilters.ContainsKey($mvpFilterName)) { continue }

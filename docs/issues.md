@@ -17,6 +17,18 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (2026-10-18 — 0.15.0 — DSM-050)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-050 | Cleanup can remove a driver staged too recently to roll back | `DriverFolderMinAgeDays`; `DSM-VALIDATE-OK` (Pester 122, lint 0/33, PS 5.1 smoke) |
+
+- **Status:** Resolved
+- **Severity:** Medium
+- **Plan:** `plans/2026-10-16_dsm-050-driver-folder-age_e4b7c2a1.plan.md`
+- **Remediation:** The module uses the FileRepository folder creation time. The enterprise MVP uses the published INF. `0` keeps every age. Intune builds default to 14. A missing folder is not cleaned up. Detection uses the same age.
+- **Resolution:** `DSM-VALIDATE-OK`. Pester 122. Lint 0/33. PS 5.1 smoke. MVP detect 659 lines, remediate 817 lines. YAML `completion_claimed`.
+
 ## Resolved issues (2026-10-14 — 0.14.1)
 
 No new `DSM-` id. ACL tests pass on an elevated host and on Windows
@@ -372,6 +384,8 @@ rebuilt `dist/intune/*.ps1`.
 ## Activity
 
 <!-- ISSUES-ACTIVITY+ -->
+- **2026-10-18 08:40:00** — Cut **0.15.0** (`DSM-050`): driver-store folders are cleaned up only when older than `DriverFolderMinAgeDays`.
+- **2026-10-16 19:20:37** — Resolved `DSM-050`: a driver-store folder is cleaned up only when it is older than `DriverFolderMinAgeDays` (Intune default 14; `0` keeps every age). `DSM-VALIDATE-OK` (Pester 122, lint 0/33, PS 5.1 smoke).
 - **2026-10-16 15:24:00** — Register heading for **0.14.1** (ACL tests; no new `DSM-` id). Changelog `0.14.0` cites **DSM-047**.
 - **2026-10-14 21:40:00** — Cut **0.14.1**: ACL tests pass on an elevated host and on Windows PowerShell 5.1.
 - **2026-10-14 21:24:00** — Cut **0.14.0** (`DSM-047`, `DSM-048`, `DSM-049`): class backup folders, retention, and ProgramData access.

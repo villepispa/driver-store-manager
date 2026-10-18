@@ -312,7 +312,10 @@ function Measure-DsmDriverStoreScope {
 
         [bool] $IncludeSignatureInVulnerable = $true,
 
-        [switch] $OrphanIncludesDisconnectedInstalled
+        [switch] $OrphanIncludesDisconnectedInstalled,
+
+        [ValidateRange(0, 36500)]
+        [int] $DriverFolderMinAgeDays = 0
     )
 
     $pkgs = @(
@@ -399,7 +402,10 @@ function Measure-DsmDriverStoreScope {
     $orphans = @($pkgs | Where-Object {
             Test-DsmPackageIsOrphanCandidate -Package $_ -IncludeDisconnectedInstalled:$OrphanIncludesDisconnectedInstalled
         })
-    $deletable = @($pkgs | Where-Object { Test-DsmPackageIsDeletableCandidate -Package $_ })
+    $deletable = @($pkgs | Where-Object {
+            (Test-DsmPackageIsDeletableCandidate -Package $_) -and
+            (Test-DsmDriverFolderIsOldEnough -Package $_ -MinAgeDays $DriverFolderMinAgeDays)
+        })
 
     $reclaimable = 0L
     foreach ($pkg in $deletable) {

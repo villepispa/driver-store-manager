@@ -81,6 +81,16 @@ deleted. Preserve is independent of `InUse` — protects latest DisplayLink per 
 printer queue drivers, unplugged USB packages per operator rules.
 See `examples/preserve-rules.example.json`.
 
+## Gate 6c — Driver folder age
+
+`DriverFolderMinAgeDays` keeps a staged driver until its FileRepository folder is
+older than that many days, so a previous driver can still be rolled back. `0`
+keeps every age. The module and the full Intune bundles use the folder creation
+time. The enterprise MVP uses the published INF under `%SystemRoot%\INF`, which
+is written when the package is staged. A missing folder is not a cleanup
+candidate. Intune builds default to 14 days. Detection uses the same age, so a
+young orphan does not stay non-compliant.
+
 ## Gate 7 — Vulnerability scan is advisory
 
 `Test-DsmDriverVulnerabilities` **never** auto-deletes blocklisted drivers.

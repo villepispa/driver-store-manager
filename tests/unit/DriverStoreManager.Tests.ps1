@@ -1019,6 +1019,45 @@ Describe 'Get-DsmDriverStoreCleanupPlan' {
         $plan.FilterExcludedCount | Should-Be 1
         $plan.NotDeletableInScopeCount | Should-Be 1
     }
+
+    It 'Skips a driver folder that is newer than DriverFolderMinAgeDays' {
+        $repo = Join-Path $TestDrive 'age-repo'
+        $oldDir = Join-Path $repo 'oldpkg'
+        $newDir = Join-Path $repo 'newpkg'
+        New-Item -ItemType Directory -Path $oldDir, $newDir -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $oldDir 'old.sys') -Value 'old' -Encoding ASCII
+        Set-Content -LiteralPath (Join-Path $newDir 'new.sys') -Value 'new' -Encoding ASCII
+        (Get-Item -LiteralPath $oldDir).CreationTime = (Get-Date).AddDays(-40)
+        $previousRoot = $script:DsmFileRepositoryRootOverride
+        $previousIndex = $script:DsmFileRepositoryFileIndex
+        try {
+            $script:DsmFileRepositoryRootOverride = $repo
+            $script:DsmFileRepositoryFileIndex = $null
+            $oldPkg = New-TestDsmPackage -PublishedName 'oem1.inf' -Files @('old.sys') `
+                -DeviceAssociation 'NeverAssociated'
+            $newPkg = New-TestDsmPackage -PublishedName 'oem2.inf' -Files @('new.sys') `
+                -DeviceAssociation 'NeverAssociated'
+            $oldPkg | Add-Member -NotePropertyName CollectedAt -NotePropertyValue (Get-Date) -Force
+            $newPkg | Add-Member -NotePropertyName CollectedAt -NotePropertyValue (Get-Date) -Force
+            (Test-DsmDriverFolderIsOldEnough -Package $oldPkg -MinAgeDays 14) | Should-Be $true
+            (Test-DsmDriverFolderIsOldEnough -Package $newPkg -MinAgeDays 14) | Should-Be $false
+            (Test-DsmDriverFolderIsOldEnough -Package $newPkg -MinAgeDays 0) | Should-Be $true
+            $missing = New-TestDsmPackage -PublishedName 'oem3.inf' -Files @('missing.sys')
+            (Test-DsmDriverFolderIsOldEnough -Package $missing -MinAgeDays 14) | Should-Be $false
+
+            $aged = Get-DsmDriverStoreCleanupPlan -Inventory @($oldPkg, $newPkg) `
+                -DriverFolderMinAgeDays 14
+            $aged.CandidateCount | Should-Be 1
+            $aged.Candidates[0].PublishedName | Should-Be 'oem1.inf'
+            $open = Get-DsmDriverStoreCleanupPlan -Inventory @($oldPkg, $newPkg) `
+                -DriverFolderMinAgeDays 0
+            $open.CandidateCount | Should-Be 2
+        }
+        finally {
+            $script:DsmFileRepositoryRootOverride = $previousRoot
+            $script:DsmFileRepositoryFileIndex = $previousIndex
+        }
+    }
 }
 
 Describe 'Remove-DsmUnusedDriverPackages' {

@@ -85,7 +85,10 @@ function Get-DsmDriverStoreReport {
 
         [string] $SettingsPath,
 
-        [switch] $ShowEffectiveSettings
+        [switch] $ShowEffectiveSettings,
+
+        [ValidateRange(0, 36500)]
+        [int] $DriverFolderMinAgeDays = 0
     )
 
     $null = Set-DsmCallerSettingsOverlay -BoundParameters $PSBoundParameters
@@ -166,13 +169,15 @@ function Get-DsmDriverStoreReport {
         -FilterResult $globalFilterResult `
         -FamilyGroupBy $FamilyGroupBy `
         -IncludeSignatureInVulnerable:$VulnerableIncludesSignature `
-        -OrphanIncludesDisconnectedInstalled
+        -OrphanIncludesDisconnectedInstalled `
+        -DriverFolderMinAgeDays $DriverFolderMinAgeDays
 
     $scopedScope = Measure-DsmDriverStoreScope -Packages $scopedPkgs `
         -FilterResult $scopedFilterResult `
         -FamilyGroupBy $FamilyGroupBy `
         -IncludeSignatureInVulnerable:$VulnerableIncludesSignature `
-        -OrphanIncludesDisconnectedInstalled
+        -OrphanIncludesDisconnectedInstalled `
+        -DriverFolderMinAgeDays $DriverFolderMinAgeDays
 
     $vulnManifest = $null
     if ($runVuln) {

@@ -13,6 +13,7 @@ $DsmInventoryMaxAgeMinutes = $null
 $DsmIncludeDism = $null
 $DsmShowEffectiveSettings = $null
 $DsmRestrictProgramDataAccess = $true
+$DsmDriverFolderMinAgeDays = 14
 # endregion DSM_BUILD_CONFIG
 
 if ($DsmInlinePreserveRulesContent) {
@@ -47,6 +48,7 @@ try {
         PassThru      = $true
         MaxDeletes          = $DsmRemediationMaxDeletes
         BackupRetentionDays = $DsmBackupRetentionDays
+        DriverFolderMinAgeDays = $DsmDriverFolderMinAgeDays
     }
     if ($DsmPreserveRulesPath -and (Test-Path -LiteralPath $DsmPreserveRulesPath)) {
         $cleanupParams['PreserveRulesPath'] = $DsmPreserveRulesPath

@@ -835,6 +835,42 @@ function Get-DsmDriverPackageRepositoryDir {
     return $topDirs[0]
 }
 
+function Test-DsmDriverFolderIsOldEnough {
+    <#
+    .SYNOPSIS
+        True when a staged driver folder is old enough to clean up.
+    .DESCRIPTION
+        Uses the FileRepository directory creation time, which is when the
+        package was added to the store. MinAgeDays 0 keeps every age. A missing
+        folder is not old enough, so cleanup does not guess.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [psobject] $Package,
+
+        [ValidateRange(0, 36500)]
+        [int] $MinAgeDays = 0
+    )
+
+    if ($MinAgeDays -le 0) {
+        return $true
+    }
+
+    $dir = Get-DsmDriverPackageRepositoryDir -Package $Package
+    if ([string]::IsNullOrWhiteSpace($dir)) {
+        return $false
+    }
+
+    $item = Get-Item -LiteralPath $dir -Force -ErrorAction SilentlyContinue
+    if (-not $item) {
+        return $false
+    }
+
+    $cutoff = (Get-Date).AddDays(-1 * $MinAgeDays)
+    return ($item.CreationTime -lt $cutoff)
+}
+
 function Get-DsmDriverPackageInfPath {
     <#
     .SYNOPSIS

@@ -25,6 +25,7 @@ $DsmInventoryMaxAgeMinutes = $null
 $DsmIncludeDism = $null
 $DsmShowEffectiveSettings = $null
 $DsmRestrictProgramDataAccess = $true
+$DsmDriverFolderMinAgeDays = 14
 # endregion DSM_BUILD_CONFIG
 
 if ($DsmInlineBlocklistContent) {
@@ -87,6 +88,7 @@ try {
             Write-Host ('{0}={1} (intune)' -f $dsmKey, (@($DsmFilter[$dsmKey]) -join ','))
         }
     }
+    $reportParams['DriverFolderMinAgeDays'] = $DsmDriverFolderMinAgeDays
 
     $report = Get-DsmDriverStoreReport @reportParams -OutputPath $DsmReportRoot
     if ($report.OutputFiles -and $report.OutputFiles.FilteredCsv) {
@@ -114,6 +116,7 @@ try {
         if ($null -ne $DsmInventoryMaxAgeMinutes) {
             $previewParams['InventoryMaxAgeMinutes'] = $DsmInventoryMaxAgeMinutes
         }
+        $previewParams['DriverFolderMinAgeDays'] = $DsmDriverFolderMinAgeDays
         if ($DsmIncludeDism -and $reportParams.ContainsKey('Inventory')) {
             $previewParams['Inventory'] = $reportParams['Inventory']
         }

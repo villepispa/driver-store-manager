@@ -32,11 +32,17 @@ Describe 'Build-DsmIntuneScripts configuration' {
         $detect.Contains('#region DSM source: Private/Dsm.Settings.ps1') | Should-Be $true
         $remediate.Contains("`$DsmRemediationMaxDeletes = 10") | Should-Be $true
         $remediate.Contains("`$DsmBackupRetentionDays = 30") | Should-Be $true
+        $remediate.Contains("`$DsmDriverFolderMinAgeDays = 14") | Should-Be $true
+        $detect.Contains("`$DsmDriverFolderMinAgeDays = 14") | Should-Be $true
         $remediate.Contains("`$DsmRestrictProgramDataAccess = `$true") | Should-Be $true
         $remediate.Contains("`$DsmPreserveRulesPath = `$null") | Should-Be $true
         $remediate.Contains('function Set-DsmCallerSettingsOverlay') | Should-Be $true
         Test-Path -LiteralPath (Join-Path $outDir 'mvp\Detect-DsmDriverStoreCompliance.ps1') | Should-Be $true
         Test-Path -LiteralPath (Join-Path $outDir 'mvp\Remediate-DsmDriverStore.ps1') | Should-Be $true
+        $mvpDetect = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $mvpRemediate = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+        $mvpDetect.Contains("`$MvpDriverFolderMinAgeDays = 14") | Should-Be $true
+        $mvpRemediate.Contains("`$MvpDriverFolderMinAgeDays = 14") | Should-Be $true
     }
 
     It 'Report lists the MVP copies next to the full bundles' {
@@ -195,6 +201,7 @@ Describe 'Build-DsmIntuneScripts configuration' {
   "BlocklistPath": "blocklist-hashes.txt",
   "MaxDeletes": 4,
   "BackupRetentionDays": 14,
+  "DriverFolderMinAgeDays": 7,
   "RestrictProgramDataAccess": false,
   "MicrosoftBlocklistMaxAgeDays": 3,
   "IncludeWindowsBuiltIn": false,
@@ -221,9 +228,13 @@ Describe 'Build-DsmIntuneScripts configuration' {
         $remediate.Contains("DriverClass = @('Printer')") | Should-Be $true
         $remediate.Contains("`$DsmRemediationMaxDeletes = 4") | Should-Be $true
         $remediate.Contains("`$DsmBackupRetentionDays = 14") | Should-Be $true
+        $remediate.Contains("`$DsmDriverFolderMinAgeDays = 7") | Should-Be $true
+        $detect.Contains("`$DsmDriverFolderMinAgeDays = 7") | Should-Be $true
         $remediate.Contains("`$DsmRestrictProgramDataAccess = `$false") | Should-Be $true
         $remediate.Contains('Site printers') | Should-Be $true
         $remediate.Contains($hash) | Should-Be $false
+        $mvpRemediate = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+        $mvpRemediate.Contains("`$MvpDriverFolderMinAgeDays = 7") | Should-Be $true
     }
 
     It 'Bound builder parameters replace settings-file values' {

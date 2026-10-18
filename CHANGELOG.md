@@ -7,7 +7,19 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.14.1**._
+_Nothing queued — latest release: **0.15.0**._
+
+## [0.15.0] — 2026-10-18
+
+### Added
+
+- **DSM-050:** `DriverFolderMinAgeDays` leaves a driver-store folder in place
+  until it is older than that many days, so a previous driver can still be
+  rolled back. `0` keeps every age. Intune builds default to 14. The
+  enterprise MVP uses the published INF creation time. A missing folder is
+  not cleaned up.
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.15.0` for this
+  release.
 
 ## [0.14.1] — 2026-10-14
 

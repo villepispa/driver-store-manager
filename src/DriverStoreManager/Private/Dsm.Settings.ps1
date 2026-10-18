@@ -45,6 +45,7 @@ function Get-DsmAllowedSettingsKeyMap {
         OutputPath                    = 'path'
         BackupRoot                    = 'path'
         BackupRetentionDays           = 'int'
+        DriverFolderMinAgeDays        = 'int'
         RestrictProgramDataAccess     = 'bool'
         MaxDeletes                    = 'int'
         MicrosoftBlocklistMaxAgeDays  = 'int'

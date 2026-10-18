@@ -34,6 +34,7 @@ BeforeAll {
             DSM_MVP_STUB_LOG        = $env:DSM_MVP_STUB_LOG
             DSM_MVP_ASSUME_ELEVATED = $env:DSM_MVP_ASSUME_ELEVATED
             DSM_MVP_SKIP_STATE_ACL  = $env:DSM_MVP_SKIP_STATE_ACL
+            DSM_MVP_INF_ROOT        = $env:DSM_MVP_INF_ROOT
         }
         $logPath = Join-Path $StateRoot 'pnputil-stub.log'
         New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
@@ -81,6 +82,7 @@ BeforeAll {
             $env:DSM_MVP_STUB_LOG = $previous.DSM_MVP_STUB_LOG
             $env:DSM_MVP_ASSUME_ELEVATED = $previous.DSM_MVP_ASSUME_ELEVATED
             $env:DSM_MVP_SKIP_STATE_ACL = $previous.DSM_MVP_SKIP_STATE_ACL
+            $env:DSM_MVP_INF_ROOT = $previous.DSM_MVP_INF_ROOT
         }
     }
 
@@ -189,6 +191,38 @@ Describe 'Enterprise Intune MVP scripts' {
         $summary = Get-Content -LiteralPath $summaryFile.FullName -Raw | ConvertFrom-Json
         $summary.DeletedCount | Should -Be 1
         $summary.ExportOrDeleteFailedCount | Should -Be 0
+    }
+
+    It 'Deletes only a published INF older than the configured age' {
+        $fixture = Join-Path $TestDrive 'age'
+        $state = Join-Path $TestDrive 'age-state'
+        $infRoot = Join-Path $TestDrive 'age-inf'
+        New-Item -ItemType Directory -Path $infRoot -Force | Out-Null
+        New-MvpFixtureSet -Root $fixture -ExtraDriverLines @(
+            'oem9.inf,orphan.inf,OrphanCo,System,1.0.0.0,,orphan.sys'
+            'oem10.inf,fresh.inf,FreshCo,System,1.0.0.0,,fresh.sys'
+        )
+        $oldInf = Join-Path $infRoot 'oem9.inf'
+        $newInf = Join-Path $infRoot 'oem10.inf'
+        Set-Content -LiteralPath $oldInf -Value 'old' -Encoding Ascii
+        Set-Content -LiteralPath $newInf -Value 'new' -Encoding Ascii
+        (Get-Item -LiteralPath $oldInf).CreationTime = (Get-Date).AddDays(-40)
+        $scriptPath = Join-Path $TestDrive 'Remediate-Age.ps1'
+        $text = [System.IO.File]::ReadAllText($script:RemediateScript)
+        $text = $text.Replace('$MvpDriverFolderMinAgeDays = 0', '$MvpDriverFolderMinAgeDays = 10')
+        [System.IO.File]::WriteAllText($scriptPath, $text)
+        $env:DSM_MVP_INF_ROOT = $infRoot
+        try {
+            $run = Invoke-MvpChild -ScriptPath $scriptPath -FixtureRoot $fixture -StateRoot $state
+        }
+        finally {
+            Remove-Item Env:DSM_MVP_INF_ROOT -ErrorAction SilentlyContinue
+        }
+        $run.ExitCode | Should -Be 0
+        $run.StdOut | Should -Match 'DSM-MVP-REMEDIATE deleted=1 failed=0'
+        $run.Log | Should -Match 'delete-driver oem9.inf'
+        $run.Log | Should -Not -Match 'delete-driver oem10.inf'
+        $run.Log | Should -Not -Match 'delete-driver oem3.inf'
     }
 
     It 'Loads preserve rules from an endpoint path and fails closed when that file is missing' {

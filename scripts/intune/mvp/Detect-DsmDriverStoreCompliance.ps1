@@ -15,6 +15,7 @@
   Test seams (unset on Intune devices): DSM_MVP_STUB_PNPUTIL=1 reads CSV
   fixtures from DSM_MVP_FIXTURE_ROOT. DSM_MVP_STATE_ROOT replaces ProgramData.
   DSM_MVP_SKIP_STATE_ACL=1 leaves the state-folder access list unchanged.
+  DSM_MVP_INF_ROOT replaces %SystemRoot%\INF for the folder-age check.
   A stub without fixtures exits 2.
 
 .EXAMPLE
@@ -36,6 +37,8 @@ $ErrorActionPreference = 'Stop'
 $MvpOrphanThreshold = 1
 $MvpDetectOrphanCandidates = $true
 $MvpRestrictProgramDataAccess = $true
+# 0 keeps every age. The Intune build writes 14 unless settings override.
+$MvpDriverFolderMinAgeDays = 0
 $MvpFilterDriverClass = @()
 $MvpFilterProvider = @()
 $MvpFilterPublishedName = @()
@@ -515,6 +518,20 @@ try {
         }
     }
 
+    function Test-MvpDriverFolderIsOldEnough {
+        param([string] $PublishedName)
+        if ($MvpDriverFolderMinAgeDays -le 0) { return $true }
+        $infRoot = $env:DSM_MVP_INF_ROOT
+        if ([string]::IsNullOrWhiteSpace($infRoot)) {
+            $infRoot = Join-Path $env:SystemRoot 'INF'
+        }
+        $infPath = Join-Path $infRoot $PublishedName
+        if (-not (Test-Path -LiteralPath $infPath)) { return $false }
+        $created = (Get-Item -LiteralPath $infPath).CreationTime
+        $cutoff = (Get-Date).AddDays(-1 * $MvpDriverFolderMinAgeDays)
+        return ($created -lt $cutoff)
+    }
+
     $deletable = New-Object System.Collections.Generic.List[object]
     $connectedCount = 0
     $disconnectedCount = 0
@@ -529,6 +546,7 @@ try {
         if (-not (Test-MvpPackageMatches -Package $pkg -Filter $scopeFilter)) { continue }
         if ($pkg.DeviceAssociation -ne 'NeverAssociated') { continue }
         if ($pkg.Preserved) { continue }
+        if (-not (Test-MvpDriverFolderIsOldEnough -PublishedName ([string]$pkg.PublishedName))) { continue }
         [void]$deletable.Add($pkg)
     }
 

@@ -4,6 +4,9 @@
 #
 # Scans browser_download_url assets plus auto source zipball/tarball URLs.
 # Fails the job when any URL report has malicious > 0.
+# Final step: file-scan the public tag archive zip (download uses no GitHub token).
+# https://github.com/<owner>/<repo>/archive/refs/tags/<tag>.zip
+# File report: https://www.virustotal.com/gui/file/<sha256>
 
 name: virustotal-release-scan
 
@@ -171,6 +174,157 @@ jobs:
           print(f"VT-RELEASE-OK urls={len(urls)} suspicious={suspicious}")
           PY
 
+      - name: File-scan tag archive zip
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VIRUSTOTAL_API_KEY:-}" ]; then
+            echo "::error::Repository secret VIRUSTOTAL_API_KEY is not set"
+            exit 1
+          fi
+          python3 <<'PY'
+          import hashlib, json, os, sys, time, urllib.error, urllib.request, uuid
+
+          api_key = os.environ["VIRUSTOTAL_API_KEY"]
+          tag = os.environ["TAG"]
+          repo = os.environ["REPO"]
+          archive_url = f"https://github.com/{repo}/archive/refs/tags/{tag}.zip"
+          print(f"archive_url={archive_url}")
+          # Free API is about 4 requests/minute. The URL scan just finished.
+          time.sleep(16)
+
+          def vt(method, url, data=None, headers=None):
+              req = urllib.request.Request(url, data=data, headers=headers, method=method)
+              try:
+                  with urllib.request.urlopen(req, timeout=180) as resp:
+                      raw = resp.read()
+                      body = json.loads(raw.decode() or "{}")
+                      return resp.status, body
+              except urllib.error.HTTPError as exc:
+                  raw = exc.read().decode() or "{}"
+                  try:
+                      body = json.loads(raw)
+                  except json.JSONDecodeError:
+                      body = {"error": raw[:400]}
+                  return exc.code, body
+
+          base = {"x-apikey": api_key, "accept": "application/json"}
+          dl = urllib.request.Request(
+              archive_url,
+              method="GET",
+              headers={"user-agent": "oss-release-vt-file-scan"},
+          )
+          try:
+              with urllib.request.urlopen(dl, timeout=180) as resp:
+                  blob = resp.read()
+          except urllib.error.HTTPError as exc:
+              print(f"::error::Public tag archive download failed HTTP {exc.code} {archive_url}")
+              sys.exit(2)
+
+          sha = hashlib.sha256(blob).hexdigest()
+          print(f"sha256={sha} bytes={len(blob)}")
+
+          def poll(analysis_id):
+              status = "queued"
+              stats = {}
+              for attempt in range(20):
+                  if attempt:
+                      time.sleep(15)
+                  code, analysis = vt(
+                      "GET",
+                      f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
+                      headers=base,
+                  )
+                  if code >= 400:
+                      print(f"::error::VirusTotal analysis HTTP {code}")
+                      sys.exit(1)
+                  status = analysis["data"]["attributes"]["status"]
+                  if status == "completed":
+                      return analysis["data"]["attributes"].get("stats") or {}
+              print(f"::error::VirusTotal file analysis incomplete status={status}")
+              sys.exit(1)
+
+          code, report = vt(
+              "GET", f"https://www.virustotal.com/api/v3/files/{sha}", headers=base
+          )
+          source = "lookup"
+          if code == 200:
+              attrs = (report.get("data") or {}).get("attributes") or {}
+              stats = attrs.get("last_analysis_stats") or {}
+              if "malicious" not in stats:
+                  code, sub = vt(
+                      "POST",
+                      f"https://www.virustotal.com/api/v3/files/{sha}/analyse",
+                      headers=base,
+                  )
+                  if code >= 400:
+                      print(f"::error::VirusTotal analyse HTTP {code}")
+                      sys.exit(1)
+                  stats = poll(sub["data"]["id"])
+          elif code == 404:
+              source = "upload"
+              post_url = "https://www.virustotal.com/api/v3/files"
+              if len(blob) > 32 * 1024 * 1024:
+                  code, up = vt(
+                      "GET",
+                      "https://www.virustotal.com/api/v3/files/upload_url",
+                      headers=base,
+                  )
+                  if code >= 400:
+                      print(f"::error::VirusTotal upload URL HTTP {code}")
+                      sys.exit(1)
+                  post_url = up["data"]
+              boundary = "----vtboundary" + uuid.uuid4().hex
+              head = (
+                  f"--{boundary}\r\n"
+                  'Content-Disposition: form-data; name="file"; filename="release-archive.zip"\r\n'
+                  "Content-Type: application/zip\r\n\r\n"
+              ).encode()
+              tail = f"\r\n--{boundary}--\r\n".encode()
+              headers = dict(base)
+              headers["content-type"] = f"multipart/form-data; boundary={boundary}"
+              code, sub = vt("POST", post_url, data=head + blob + tail, headers=headers)
+              if code >= 400:
+                  print(f"::error::VirusTotal file upload HTTP {code}")
+                  sys.exit(1)
+              stats = poll(sub["data"]["id"])
+          else:
+              print(f"::error::VirusTotal file lookup HTTP {code}")
+              sys.exit(1)
+
+          mal = int(stats.get("malicious") or 0)
+          sus = int(stats.get("suspicious") or 0)
+          row = {
+              "archiveUrl": archive_url,
+              "sha256": sha,
+              "source": source,
+              "malicious": mal,
+              "suspicious": sus,
+              "undetected": int(stats.get("undetected") or 0),
+              "harmless": int(stats.get("harmless") or 0),
+              "guiUrl": f"https://www.virustotal.com/gui/file/{sha}",
+          }
+          print(json.dumps(row))
+          summary = {
+              "tag": tag,
+              "archiveUrl": archive_url,
+              "sha256": sha,
+              "source": source,
+              "malicious": mal,
+              "suspicious": sus,
+              "guiUrl": row["guiUrl"],
+          }
+          with open("vt-file-summary.json", "w", encoding="utf-8") as out:
+              json.dump(summary, out, indent=2)
+          if mal:
+              print(f"::error::VirusTotal file malicious={mal} {row['guiUrl']}")
+              sys.exit(1)
+          print(f"VT-FILE-OK sha256={sha} suspicious={sus} gui={row['guiUrl']}")
+          PY
+
       - name: Upload summary artifact
         if: always()
         uses: actions/upload-artifact@v7
@@ -178,6 +332,7 @@ jobs:
           name: vt-release-summary-${{ steps.tag.outputs.tag }}
           path: |
             vt-summary.json
+            vt-file-summary.json
             urls.txt
             release.json
           if-no-files-found: ignore

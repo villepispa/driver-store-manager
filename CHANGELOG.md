@@ -7,7 +7,20 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.15.1**._
+_Nothing queued — latest release: **0.16.0**._
+
+## [0.16.0] — 2026-11-06
+
+### Added
+
+- **DSM-052:** Enterprise MVP detection writes `driver-store-report_<stamp>.json`,
+  matching the full bundle. Detection and remediation (MVP and full) log
+  Connected, DisconnectedInstalled, Preserved, and deletable oem INF names.
+  Remediation results include driver class next to published name, action,
+  and backup path. `export-or-delete-failed_<stamp>.json` records each export
+  or delete failure with the package fields and the exception detail.
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.16.0` for this
+  release.
 
 ## [0.15.1] — 2026-11-06
 

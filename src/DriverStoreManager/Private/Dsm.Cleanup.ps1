@@ -246,7 +246,17 @@ function New-DsmCleanupResultRow {
 
         [string] $BackupPath,
 
-        [string] $ErrorMessage
+        [string] $ErrorMessage,
+
+        [string] $FailurePhase,
+
+        [string] $ErrorType,
+
+        [string] $ErrorDetail,
+
+        [string] $FullyQualifiedErrorId,
+
+        [string] $ScriptStackTrace
     )
 
     $meta = Get-DsmDriverPackageInfMetadata -Package $Package
@@ -275,9 +285,12 @@ function New-DsmCleanupResultRow {
 
     return [pscustomobject]@{
         PublishedName              = $Package.PublishedName
+        DriverClass                = $Package.DriverClass
+        Action                     = $Action
+        BackupPath                 = $BackupPath
+        FailurePhase               = $FailurePhase
         OriginalName               = $Package.OriginalName
         Provider                   = $Package.Provider
-        DriverClass                = $Package.DriverClass
         DriverVersion              = $Package.DriverVersion
         DriverVer                  = $meta.DriverVer
         DiskId                     = $meta.DiskId
@@ -286,10 +299,45 @@ function New-DsmCleanupResultRow {
         IsOldVersionOfInUseFamily  = [bool]$Package.IsOldVersionOfInUseFamily
         InUseNewerDriver           = $inUseNewer
         Preserved                  = [bool](Get-DsmObjectPropertyValue -Object $Package -Name 'Preserved')
-        Action                     = $Action
         Timestamp                  = Get-Date
-        BackupPath                 = $BackupPath
         Error                      = $ErrorMessage
+        ErrorType                  = $ErrorType
+        ErrorDetail                = $ErrorDetail
+        FullyQualifiedErrorId      = $FullyQualifiedErrorId
+        ScriptStackTrace           = $ScriptStackTrace
+    }
+}
+
+function Get-DsmErrorRecordDetail {
+    <#
+    .SYNOPSIS
+        Copies the exception fields needed to diagnose an export or delete failure.
+    #>
+    [CmdletBinding()]
+    param(
+        $ErrorRecord
+    )
+
+    $message = ''
+    $typeName = ''
+    $detail = ''
+    if ($ErrorRecord -and $ErrorRecord.Exception) {
+        $message = [string]$ErrorRecord.Exception.Message
+        $typeName = $ErrorRecord.Exception.GetType().FullName
+        $detail = $ErrorRecord.Exception.ToString()
+    }
+    $errorId = ''
+    $stack = ''
+    if ($ErrorRecord) {
+        $errorId = [string]$ErrorRecord.FullyQualifiedErrorId
+        $stack = [string]$ErrorRecord.ScriptStackTrace
+    }
+    return [pscustomobject]@{
+        Message               = $message
+        ErrorType             = $typeName
+        ErrorDetail           = $detail
+        FullyQualifiedErrorId = $errorId
+        ScriptStackTrace      = $stack
     }
 }
 
@@ -314,9 +362,16 @@ function Write-DsmCleanupResultLog {
 
     Write-Host "`n$Title ($($Results.Count)):" -ForegroundColor Cyan
     foreach ($row in $Results) {
-        $label = if ($row.DisplayName) { $row.DisplayName } else { $row.Provider }
+        $className = [string]$row.DriverClass
+        $action = [string]$row.Action
+        $backup = [string]$row.BackupPath
         $ver = if ($row.DriverVer) { $row.DriverVer } else { $row.DriverVersion }
-        $line = '{0,-12} {1,-36} DriverVer={2}' -f $row.PublishedName, $label, $ver
+        $line = '{0} Class={1} Action={2} BackupPath={3} DriverVer={4}' -f `
+            $row.PublishedName, $className, $action, $backup, $ver
+        if ($row.Action -eq 'ExportOrDeleteFailed') {
+            $line += (' FailurePhase={0} ErrorType={1} Error={2}' -f `
+                    $row.FailurePhase, $row.ErrorType, $row.Error)
+        }
         if ($row.InUseNewerDriver) {
             $newer = $row.InUseNewerDriver
             $newerLabel = if ($newer.DisplayName) { $newer.DisplayName } else { $newer.PublishedName }

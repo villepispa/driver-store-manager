@@ -125,6 +125,10 @@ Describe 'Enterprise Intune MVP scripts' {
         $run = Invoke-MvpChild -ScriptPath $script:DetectScript -FixtureRoot $fixture -StateRoot $state
         $run.ExitCode | Should -Be 0
         $run.StdOut | Should -Match 'DSM-MVP-DETECT deletable=0'
+        $run.StdOut | Should -Match 'DSM-MVP-DETECT Connected=oem1.inf'
+        $run.StdOut | Should -Match 'DSM-MVP-DETECT DisconnectedInstalled=oem2.inf'
+        $run.StdOut | Should -Match 'DSM-MVP-DETECT Preserved=\(none\)'
+        $run.StdOut | Should -Match 'DSM-MVP-DETECT DeletablePublishedNames=\(none\)'
     }
 
     It 'Exits 1 for a NeverAssociated orphan and keeps a printer' {
@@ -136,12 +140,17 @@ Describe 'Enterprise Intune MVP scripts' {
         )
         $run = Invoke-MvpChild -ScriptPath $script:DetectScript -FixtureRoot $fixture -StateRoot $state
         $run.ExitCode | Should -Be 1
-        $reportFile = Get-ChildItem -LiteralPath (Join-Path $state 'intune-mvp-detection') -Filter 'driver-store-mvp_*.json' |
+        $reportFile = Get-ChildItem -LiteralPath (Join-Path $state 'intune-mvp-detection') -Filter 'driver-store-report_*.json' |
             Select-Object -First 1
         $report = Get-Content -LiteralPath $reportFile.FullName -Raw | ConvertFrom-Json
         $report.DeletableCandidateCount | Should -Be 1
         @($report.DeletablePublishedNames) -contains 'oem9.inf' | Should -Be $true
         @($report.DeletablePublishedNames) -contains 'oem8.inf' | Should -Be $false
+        @($report.ConnectedPublishedNames) | Should -Be @('oem1.inf')
+        @($report.DisconnectedInstalledPublishedNames) | Should -Be @('oem2.inf')
+        @($report.PreservedPublishedNames) | Should -Be @('oem8.inf')
+        $run.StdOut | Should -Match 'DSM-MVP-DETECT Preserved=oem8.inf'
+        $run.StdOut | Should -Match 'DSM-MVP-DETECT DeletablePublishedNames=oem9.inf'
     }
 
     It 'Preserves the latest package in a KeepLatest family' {
@@ -153,7 +162,7 @@ Describe 'Enterprise Intune MVP scripts' {
         )
         $run = Invoke-MvpChild -ScriptPath $script:DetectScript -FixtureRoot $fixture -StateRoot $state
         $run.ExitCode | Should -Be 1
-        $reportFile = Get-ChildItem -LiteralPath (Join-Path $state 'intune-mvp-detection') -Filter 'driver-store-mvp_*.json' |
+        $reportFile = Get-ChildItem -LiteralPath (Join-Path $state 'intune-mvp-detection') -Filter 'driver-store-report_*.json' |
             Select-Object -First 1
         $report = Get-Content -LiteralPath $reportFile.FullName -Raw | ConvertFrom-Json
         @($report.DeletablePublishedNames) | Should -Be @('oem3.inf')
@@ -191,6 +200,19 @@ Describe 'Enterprise Intune MVP scripts' {
         $summary = Get-Content -LiteralPath $summaryFile.FullName -Raw | ConvertFrom-Json
         $summary.DeletedCount | Should -Be 1
         $summary.ExportOrDeleteFailedCount | Should -Be 0
+        $deleted = @($summary.Results | Where-Object { $_.Action -eq 'Deleted' })
+        $deleted[0].PublishedName | Should -Be 'oem9.inf'
+        $deleted[0].DriverClass | Should -Be 'System'
+        $deleted[0].BackupPath | Should -Match 'System'
+        $run.StdOut | Should -Match 'PublishedName=oem9.inf Class=System Action=Deleted'
+        $run.StdOut | Should -Match 'DSM-MVP-REMEDIATE Connected=oem1.inf'
+        $run.StdOut | Should -Match 'DSM-MVP-REMEDIATE DisconnectedInstalled=oem2.inf'
+        $run.StdOut | Should -Match 'DSM-MVP-REMEDIATE Preserved=oem8.inf'
+        $run.StdOut | Should -Match 'DSM-MVP-REMEDIATE DeletablePublishedNames=oem9.inf'
+        $failedFile = Get-ChildItem -LiteralPath (Join-Path $state 'reports\intune-mvp-remediation') -Filter 'export-or-delete-failed_*.json' |
+            Select-Object -First 1
+        $failed = Get-Content -LiteralPath $failedFile.FullName -Raw | ConvertFrom-Json
+        $failed.ExportOrDeleteFailedCount | Should -Be 0
     }
 
     It 'Deletes only a published INF older than the configured age' {

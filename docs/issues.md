@@ -17,6 +17,21 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (2026-11-06 — 0.16.0 — DSM-052)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-052 | Intune logs omit association lists, driver class, and export/delete failure detail | MVP Pester 10/10; cleanup mocks 8/8; scope tests 5/5 |
+
+### DSM-052 — Intune logs omit association lists and failure detail
+
+- **Status:** Resolved
+- **Severity:** Low
+- **Area:** Intune
+- **Impact:** Detection named only deletable oem INF files, and the enterprise MVP used a different report file name. Remediation results did not show driver class beside the action, and a failed export or delete kept only a short error string.
+- **Remediation:** MVP detection writes `driver-store-report_<stamp>.json`. Detection and remediation, MVP and full, log Connected, DisconnectedInstalled, Preserved, and deletable oem INF names. Remediation rows include driver class next to published name, action, and backup path. `export-or-delete-failed_<stamp>.json` stores each failure with the package fields, phase (`Export` or `Delete`), exception type, message, error id, and script stack.
+- **Evidence:** `Dsm.IntuneMvp.Tests.ps1` 10/10. `DriverStoreManager.CleanupMocks.Tests.ps1` 8/8. `Measure-DsmDriverStoreScope` 5/5. Intune bundles rebuilt.
+
 ## Resolved issues (2026-11-06 — 0.15.1 — DSM-051)
 
 | ID | Summary | Evidence |

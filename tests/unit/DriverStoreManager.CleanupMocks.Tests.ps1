@@ -53,6 +53,8 @@ Describe 'Remove-DsmUnusedDriverPackages elevation and delete mocks' {
         $run.Summary.DeletedCount | Should-Be 1
         $run.Summary.ExportOrDeleteFailedCount | Should-Be 0
         $run.Results[0].Action | Should-Be 'Deleted'
+        $run.Results[0].DriverClass | Should-Be 'Display'
+        $run.Results[0].BackupPath | Should -Not -BeNullOrEmpty
         $script:DsmMockExportCalls.Count | Should-Be 1
         $script:DsmMockDeleteCalls.Count | Should-Be 1
     }
@@ -87,6 +89,10 @@ Describe 'Remove-DsmUnusedDriverPackages elevation and delete mocks' {
         $run.Summary.DeletedCount | Should-Be 0
         $run.Summary.ExportOrDeleteFailedCount | Should-Be 1
         $run.Results[0].Action | Should-Be 'ExportOrDeleteFailed'
+        $run.Results[0].FailurePhase | Should-Be 'Export'
+        $run.Results[0].DriverClass | Should-Be 'Display'
+        $run.Results[0].Error | Should -Match 'mock export failure'
+        $run.Results[0].ErrorType | Should -Not -BeNullOrEmpty
     }
 
     It 'Honors MaxDeletes when performing delete mode' {
@@ -152,6 +158,9 @@ Describe 'Remove-DsmUnusedDriverPackages elevation and delete mocks' {
         $run.Summary.DeletedCount | Should-Be 0
         $run.Summary.ExportOrDeleteFailedCount | Should-Be 1
         $run.Results[0].Action | Should-Be 'ExportOrDeleteFailed'
+        $run.Results[0].FailurePhase | Should-Be 'Delete'
+        $run.Results[0].BackupPath | Should -Not -BeNullOrEmpty
+        $run.Results[0].Error | Should -Match 'mock delete failure'
     }
 
     It 'Names the backup folder original.inf_oemnnn.inf' {

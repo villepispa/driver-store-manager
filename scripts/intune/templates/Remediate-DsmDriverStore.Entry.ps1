@@ -87,6 +87,21 @@ try {
     $summaryPath = Join-DsmPath $DsmReportRoot "remediation-summary_$stamp.json"
     Set-DsmContentUtf8 -LiteralPath $summaryPath -Value ($summary | ConvertTo-Json -Depth 6)
 
+    Write-DsmOemPublishedNameLog -Prefix 'DSM-REMEDIATE' -Summary $run.Summary
+
+    $failedRows = @($run.Results | Where-Object { $_.Action -eq 'ExportOrDeleteFailed' })
+    $failedReport = [pscustomobject]@{
+        ScriptType                = 'IntuneRemediation'
+        GeneratedAt               = Get-Date
+        ComputerName              = $env:COMPUTERNAME
+        PowerShellVersion         = $PSVersionTable.PSVersion.ToString()
+        ExportOrDeleteFailedCount = @($failedRows).Count
+        Failures                  = @($failedRows)
+    }
+    $failedPath = Join-DsmPath $DsmReportRoot "export-or-delete-failed_$stamp.json"
+    Set-DsmContentUtf8 -LiteralPath $failedPath -Value ($failedReport | ConvertTo-Json -Depth 8)
+    Write-Host ("DSM-REMEDIATE ExportOrDeleteFailed={0} file={1}" -f @($failedRows).Count, $failedPath)
+
     if ($run.Summary.ExportOrDeleteFailedCount -gt 0) {
         exit 2
     }

@@ -208,27 +208,47 @@ function Remove-DsmUnusedDriverPackages {
             continue
         }
 
+        $packageOriginalName = ''
+        $originalProp = $pkg.PSObject.Properties['OriginalName']
+        if ($null -ne $originalProp -and $null -ne $originalProp.Value) {
+            $packageOriginalName = [string]$originalProp.Value
+        }
+        $packageDriverClass = ''
+        $classProp = $pkg.PSObject.Properties['DriverClass']
+        if ($null -ne $classProp -and $null -ne $classProp.Value) {
+            $packageDriverClass = [string]$classProp.Value
+        }
+
+        $exportDir = $null
         try {
-            $packageOriginalName = ''
-            $originalProp = $pkg.PSObject.Properties['OriginalName']
-            if ($null -ne $originalProp -and $null -ne $originalProp.Value) {
-                $packageOriginalName = [string]$originalProp.Value
-            }
-            $packageDriverClass = ''
-            $classProp = $pkg.PSObject.Properties['DriverClass']
-            if ($null -ne $classProp -and $null -ne $classProp.Value) {
-                $packageDriverClass = [string]$classProp.Value
-            }
             $exportDir = Export-DsmDriverPackageBackup -PublishedName $name -BackupRoot $BackupRoot `
                 -OriginalName $packageOriginalName -DriverClass $packageDriverClass
+        }
+        catch {
+            $info = Get-DsmErrorRecordDetail -ErrorRecord $_
+            $row = New-DsmCleanupResultRow -Package $pkg -FamilyContext $familyContext `
+                -Action 'ExportOrDeleteFailed' -FailurePhase 'Export' `
+                -ErrorMessage $info.Message -ErrorType $info.ErrorType `
+                -ErrorDetail $info.ErrorDetail -FullyQualifiedErrorId $info.FullyQualifiedErrorId `
+                -ScriptStackTrace $info.ScriptStackTrace
+            $exportFailedCount++
+            $results.Add($row) | Out-Null
+            continue
+        }
+
+        try {
             Remove-DsmDriverPackageFromStore -PublishedName $name
             $row = New-DsmCleanupResultRow -Package $pkg -FamilyContext $familyContext `
                 -Action 'Deleted' -BackupPath $exportDir
             $deletedCount++
         }
         catch {
+            $info = Get-DsmErrorRecordDetail -ErrorRecord $_
             $row = New-DsmCleanupResultRow -Package $pkg -FamilyContext $familyContext `
-                -Action 'ExportOrDeleteFailed' -ErrorMessage $_.Exception.Message
+                -Action 'ExportOrDeleteFailed' -BackupPath $exportDir -FailurePhase 'Delete' `
+                -ErrorMessage $info.Message -ErrorType $info.ErrorType `
+                -ErrorDetail $info.ErrorDetail -FullyQualifiedErrorId $info.FullyQualifiedErrorId `
+                -ScriptStackTrace $info.ScriptStackTrace
             $exportFailedCount++
         }
 
@@ -237,8 +257,15 @@ function Remove-DsmUnusedDriverPackages {
 
     Write-DsmCleanupResultLog -Results @($results)
 
+    $oemLists = Get-DsmOemAssociationNameLists -Packages @($plan.ScopedPackages) `
+        -Deletable @($plan.Candidates)
+
     $summary = [ordered]@{
         Mode                      = if ($performDelete) { 'Delete' } else { 'WhatIf' }
+        ConnectedPublishedNames             = @($oemLists.ConnectedPublishedNames)
+        DisconnectedInstalledPublishedNames = @($oemLists.DisconnectedInstalledPublishedNames)
+        PreservedPublishedNames             = @($oemLists.PreservedPublishedNames)
+        DeletablePublishedNames             = @($oemLists.DeletablePublishedNames)
         BackupRoot                = if ($performDelete) { $BackupRoot } else { $null }
         CandidateCount            = $candidates.Count
         DeletedCount              = $deletedCount

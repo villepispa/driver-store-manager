@@ -517,6 +517,24 @@ Describe 'Measure-DsmDriverStoreScope' {
         $result.Summary.NeverAssociatedCount | Should-Be 1
         $result.Summary.OrphanCandidateCount | Should-Be 2
         $result.Summary.DeletableCandidateCount | Should-Be 1
+        @($result.Summary.ConnectedPublishedNames) | Should-BeCollection @('oem1.inf')
+        @($result.Summary.DisconnectedInstalledPublishedNames) | Should-BeCollection @('oem2.inf')
+        @($result.Summary.DeletablePublishedNames) | Should-BeCollection @('oem3.inf')
+    }
+
+    It 'Lists oem published names and omits inbox drivers' {
+        $pkgs = @(
+            (New-TestDsmPackage -PublishedName 'oem1.inf' -DeviceAssociation 'Connected' -InUse $true)
+            (New-TestDsmPackage -PublishedName 'netvwifimp.inf' -DeviceAssociation 'Connected' -InUse $true)
+            (New-TestDsmPackage -PublishedName 'oem2.inf' -DeviceAssociation 'DisconnectedInstalled')
+            (New-TestDsmPackage -PublishedName 'oem3.inf' -DeviceAssociation 'NeverAssociated')
+        )
+
+        $result = Measure-DsmDriverStoreScope -Packages $pkgs
+        @($result.Summary.ConnectedPublishedNames) | Should-BeCollection @('oem1.inf')
+        @($result.Summary.DisconnectedInstalledPublishedNames) | Should-BeCollection @('oem2.inf')
+        @($result.Summary.DeletablePublishedNames) | Should-BeCollection @('oem3.inf')
+        @($result.Summary.PreservedPublishedNames).Count | Should-Be 0
     }
 
     It 'Handles missing DeviceAssociation using fallback logic on InUse and DeviceCount' {

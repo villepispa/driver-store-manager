@@ -171,6 +171,10 @@ max `$DsmRemediationMaxDeletes` (default 10) per run. Does not use `pnputil /for
   reports\intune-detection\driver-store-report_*.md
   reports\intune-detection\driver-store-filtered_*.csv
   reports\intune-remediation\remediation-summary_*.json
+  reports\intune-remediation\export-or-delete-failed_*.json
+  reports\intune-mvp-detection\driver-store-report_*.json
+  reports\intune-mvp-remediation\remediation-summary_*.json
+  reports\intune-mvp-remediation\export-or-delete-failed_*.json
   backups\<Class>\<original.inf>_<oem#.inf>\
 ```
 
@@ -195,6 +199,13 @@ as something to remove.
 is active. Detection also prints `DSM-FILTERED-DRIVERS count=N file=<path>`
 so the Intune log points at that CSV. The JSON report still contains the full
 inventory under `Global`.
+
+Detection and remediation both print oem INF lists for `Connected`,
+`DisconnectedInstalled`, `Preserved`, and `DeletablePublishedNames`.
+Remediation result lines include `PublishedName`, `Class`, `Action`, and
+`BackupPath`. `export-or-delete-failed_*.json` lists every export or delete
+failure with the package fields, failure phase (`Export` or `Delete`),
+exception type, message, error id, and script stack.
 
 ## PowerShell version strategy
 
@@ -276,6 +287,10 @@ filters, cleanup preview, and report family grouping stay in the full bundles.
 A build that sets one of those still succeeds and warns that the MVP copy
 ignored it.
 
+Detection writes `driver-store-report_<stamp>.json`, the same file name the
+full detection bundle uses. The host log and that JSON list Connected,
+DisconnectedInstalled, Preserved, and deletable oem INF names.
+
 Detection exits `1` when deletable `NeverAssociated` packages reach
 `$MvpOrphanThreshold` (default 1) and orphan detection is on. Remediation
 exports, then deletes at most `$MvpMaxDeletes` (default 10). It stores those
@@ -287,7 +302,10 @@ than `$MvpDriverFolderMinAgeDays` stays in the store (Intune builds use 14;
 `0` keeps every age). A package with no INF file is not deleted when that
 age is greater than zero. It never passes
 `pnputil /force`. Connected and disconnected-installed packages are not
-deleted. The default preserve rules match
+deleted. Each result records `PublishedName`, `DriverClass`, `Action`, and
+`BackupPath`. Failures use action `ExportOrDeleteFailed` and are also written
+to `export-or-delete-failed_<stamp>.json` with the package fields and the
+exception text. The default preserve rules match
 `examples/preserve-rules.example.json`. A device-correlation failure exits `2`
 and does not treat packages as orphans.
 

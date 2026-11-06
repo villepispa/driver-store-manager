@@ -98,6 +98,7 @@ try {
     # Scoped equals Global when no filter is baked. A baked filter (DriverClass, and so on)
     # must drive the compliance gate or remediation would delete a narrower set than detection counted.
     $summary = $report.Scoped.Summary
+    Write-DsmOemPublishedNameLog -Prefix 'DSM-DETECT' -Summary $summary
 
     if ($DsmIncludeCleanupPreview) {
         $previewParams = @{

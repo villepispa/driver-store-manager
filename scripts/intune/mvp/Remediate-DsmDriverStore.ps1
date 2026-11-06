@@ -15,7 +15,11 @@
   Only NeverAssociated packages that are
   not preserved, and whose published INF is older than
   $MvpDriverFolderMinAgeDays (0 keeps every age), are deleted. The pnputil force switch is not used. A fresh association
-  check runs again before each delete. Blocklist and DiskId stay in the full module.
+  check runs again before each delete. Each result records PublishedName,
+  DriverClass, Action, and BackupPath. Export or delete failures are written
+  to export-or-delete-failed_<stamp>.json. The host log lists Connected,
+  DisconnectedInstalled, Preserved, and Deletable oem INF names.
+  Blocklist and DiskId stay in the full module.
 
   Test seams (unset on Intune devices): DSM_MVP_STUB_PNPUTIL=1 reads CSV
   fixtures from DSM_MVP_FIXTURE_ROOT and does not call pnputil. DSM_MVP_STATE_ROOT
@@ -100,6 +104,30 @@ function Get-MvpField {
         }
     }
     return ''
+}
+
+function ConvertTo-MvpSortedNames {
+    param($Names)
+    $items = New-Object System.Collections.Generic.List[string]
+    foreach ($name in @($Names)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$name)) {
+            [void]$items.Add([string]$name)
+        }
+    }
+    if ($items.Count -eq 0) { return }
+    $items.ToArray() | Sort-Object
+}
+
+function Write-MvpNameList {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Label,
+        $Names
+    )
+    $sorted = @(ConvertTo-MvpSortedNames -Names $Names)
+    $text = '(none)'
+    if ($sorted.Count -gt 0) { $text = ($sorted -join ',') }
+    Write-Host ("{0}={1}" -f $Label, $text)
 }
 
 function Get-MvpPatternList {
@@ -540,15 +568,28 @@ try {
     }
 
     $deletable = New-Object System.Collections.Generic.List[object]
+    $connectedNames = New-Object System.Collections.Generic.List[string]
+    $disconnectedNames = New-Object System.Collections.Generic.List[string]
+    $preservedNames = New-Object System.Collections.Generic.List[string]
     $connectedCount = 0
     $disconnectedCount = 0
     $neverCount = 0
     $preservedCount = 0
     foreach ($pkg in $packages) {
-        if ($pkg.DeviceAssociation -eq 'Connected') { $connectedCount++ }
-        elseif ($pkg.DeviceAssociation -eq 'DisconnectedInstalled') { $disconnectedCount++ }
+        $publishedName = [string]$pkg.PublishedName
+        if ($pkg.DeviceAssociation -eq 'Connected') {
+            $connectedCount++
+            [void]$connectedNames.Add($publishedName)
+        }
+        elseif ($pkg.DeviceAssociation -eq 'DisconnectedInstalled') {
+            $disconnectedCount++
+            [void]$disconnectedNames.Add($publishedName)
+        }
         elseif ($pkg.DeviceAssociation -eq 'NeverAssociated') { $neverCount++ }
-        if ($pkg.Preserved) { $preservedCount++ }
+        if ($pkg.Preserved) {
+            $preservedCount++
+            [void]$preservedNames.Add($publishedName)
+        }
         if ($null -ne $allow -and -not $allow.Contains([string]$pkg.PublishedName)) { continue }
         if (-not (Test-MvpPackageMatches -Package $pkg -Filter $scopeFilter)) { continue }
         if ($pkg.DeviceAssociation -ne 'NeverAssociated') { continue }
@@ -687,6 +728,83 @@ try {
         }
     }
 
+    function Get-MvpErrorInfo {
+        param($ErrorRecord)
+        $message = ''
+        $typeName = ''
+        $detail = ''
+        if ($ErrorRecord -and $ErrorRecord.Exception) {
+            $message = [string]$ErrorRecord.Exception.Message
+            $typeName = $ErrorRecord.Exception.GetType().FullName
+            $detail = $ErrorRecord.Exception.ToString()
+        }
+        $errorId = ''
+        $stack = ''
+        if ($ErrorRecord) {
+            $errorId = [string]$ErrorRecord.FullyQualifiedErrorId
+            $stack = [string]$ErrorRecord.ScriptStackTrace
+        }
+        return [pscustomobject]@{
+            Message                 = $message
+            ErrorType               = $typeName
+            ErrorDetail             = $detail
+            FullyQualifiedErrorId   = $errorId
+            ScriptStackTrace        = $stack
+        }
+    }
+
+    function New-MvpActionResult {
+        param(
+            $Package,
+            [Parameter(Mandatory)]
+            [string] $Action,
+            [string] $BackupPath = '',
+            [string] $FailurePhase = '',
+            [string] $ErrorMessage = '',
+            [string] $ErrorType = '',
+            [string] $ErrorDetail = '',
+            [string] $FullyQualifiedErrorId = '',
+            [string] $ScriptStackTrace = ''
+        )
+        $hardware = @()
+        if ($null -ne $Package.HardwareIds) { $hardware = @($Package.HardwareIds) }
+        $reasons = @()
+        if ($null -ne $Package.PreserveReasons) { $reasons = @($Package.PreserveReasons) }
+        return [pscustomobject]@{
+            PublishedName                    = [string]$Package.PublishedName
+            DriverClass                      = [string]$Package.DriverClass
+            Action                           = $Action
+            BackupPath                       = $BackupPath
+            FailurePhase                     = $FailurePhase
+            OriginalName                     = [string]$Package.OriginalName
+            Provider                         = [string]$Package.Provider
+            Signer                           = [string]$Package.Signer
+            DriverVersion                    = [string]$Package.DriverVersion
+            DriverDate                       = [string]$Package.DriverDate
+            DeviceAssociation                = [string]$Package.DeviceAssociation
+            ConnectedDeviceCount             = $Package.ConnectedDeviceCount
+            DisconnectedInstalledDeviceCount = $Package.DisconnectedInstalledDeviceCount
+            HardwareIds                      = $hardware
+            Preserved                        = [bool]$Package.Preserved
+            PreserveReasons                  = $reasons
+            Error                            = $ErrorMessage
+            ErrorType                        = $ErrorType
+            ErrorDetail                      = $ErrorDetail
+            FullyQualifiedErrorId            = $FullyQualifiedErrorId
+            ScriptStackTrace                 = $ScriptStackTrace
+        }
+    }
+
+    function Write-MvpActionResult {
+        param($Row)
+        Write-Host ("DSM-MVP-REMEDIATE PublishedName={0} Class={1} Action={2} BackupPath={3}" -f `
+                $Row.PublishedName, $Row.DriverClass, $Row.Action, $Row.BackupPath)
+        if ($Row.Action -eq 'ExportOrDeleteFailed') {
+            Write-Host ("DSM-MVP-REMEDIATE ExportOrDeleteFailed PublishedName={0} Class={1} FailurePhase={2} ErrorType={3} Error={4}" -f `
+                    $Row.PublishedName, $Row.DriverClass, $Row.FailurePhase, $Row.ErrorType, $Row.Error)
+        }
+    }
+
     $results = New-Object System.Collections.Generic.List[object]
     $deletedCount = 0
     $failedCount = 0
@@ -702,10 +820,7 @@ try {
             if ([string]$freshRow.DeviceAssociation -eq 'NeverAssociated') { $stillOrphan = $true }
         }
         if (-not $stillOrphan) {
-            [void]$results.Add([pscustomobject]@{
-                    PublishedName = [string]$pkg.PublishedName
-                    Action        = 'SkippedNotOrphan'
-                })
+            [void]$results.Add((New-MvpActionResult -Package $pkg -Action 'SkippedNotOrphan'))
             continue
         }
 
@@ -757,11 +872,14 @@ try {
         }
         catch {
             $failedCount++
-            [void]$results.Add([pscustomobject]@{
-                    PublishedName = [string]$pkg.PublishedName
-                    Action        = 'ExportFailed'
-                    Error         = [string]$_.Exception.Message
-                })
+            $info = Get-MvpErrorInfo -ErrorRecord $_
+            $stageBackup = ''
+            if (Test-Path -LiteralPath $stageDir) { $stageBackup = $stageDir }
+            [void]$results.Add((New-MvpActionResult -Package $pkg -Action 'ExportOrDeleteFailed' `
+                        -BackupPath $stageBackup -FailurePhase 'Export' -ErrorMessage $info.Message `
+                        -ErrorType $info.ErrorType -ErrorDetail $info.ErrorDetail `
+                        -FullyQualifiedErrorId $info.FullyQualifiedErrorId `
+                        -ScriptStackTrace $info.ScriptStackTrace))
             continue
         }
         try {
@@ -769,44 +887,67 @@ try {
         }
         catch {
             $failedCount++
-            [void]$results.Add([pscustomobject]@{
-                    PublishedName = [string]$pkg.PublishedName
-                    Action        = 'DeleteFailed'
-                    Error         = [string]$_.Exception.Message
-                })
+            $info = Get-MvpErrorInfo -ErrorRecord $_
+            [void]$results.Add((New-MvpActionResult -Package $pkg -Action 'ExportOrDeleteFailed' `
+                        -BackupPath $exportDir -FailurePhase 'Delete' -ErrorMessage $info.Message `
+                        -ErrorType $info.ErrorType -ErrorDetail $info.ErrorDetail `
+                        -FullyQualifiedErrorId $info.FullyQualifiedErrorId `
+                        -ScriptStackTrace $info.ScriptStackTrace))
             continue
         }
         $deletedCount++
-        [void]$results.Add([pscustomobject]@{
-                PublishedName = [string]$pkg.PublishedName
-                Action        = 'Deleted'
-                BackupPath    = $exportDir
-            })
+        [void]$results.Add((New-MvpActionResult -Package $pkg -Action 'Deleted' -BackupPath $exportDir))
     }
 
     #section Summary
+    $deletableNames = @($deletable | ForEach-Object { [string]$_.PublishedName })
+    $connectedPublishedNames = @(ConvertTo-MvpSortedNames -Names $connectedNames)
+    $disconnectedPublishedNames = @(ConvertTo-MvpSortedNames -Names $disconnectedNames)
+    $preservedPublishedNames = @(ConvertTo-MvpSortedNames -Names $preservedNames)
+    $deletablePublishedNames = @(ConvertTo-MvpSortedNames -Names $deletableNames)
+    $failedRows = @($results | Where-Object { $_.Action -eq 'ExportOrDeleteFailed' })
     $summaryPath = Join-Path $reportRoot ("remediation-summary_{0}.json" -f $stamp)
+    $failedPath = Join-Path $reportRoot ("export-or-delete-failed_{0}.json" -f $stamp)
     $summary = [pscustomobject]@{
-        ScriptType                 = 'IntuneMvpRemediation'
-        GeneratedAt                = ([DateTimeOffset]::Now.ToString('o'))
-        ComputerName               = [string]$env:COMPUTERNAME
-        TotalOemPackages           = $packages.Count
-        ConnectedCount             = $connectedCount
-        DisconnectedInstalledCount = $disconnectedCount
-        NeverAssociatedCount       = $neverCount
-        PreservedCount             = $preservedCount
-        DeletableCandidateCount    = $deletable.Count
-        DeletedCount               = $deletedCount
-        ExportOrDeleteFailedCount  = $failedCount
-        BackupRoot                 = $backupRoot
-        Results                    = $results.ToArray()
+        ScriptType                          = 'IntuneMvpRemediation'
+        GeneratedAt                         = ([DateTimeOffset]::Now.ToString('o'))
+        ComputerName                        = [string]$env:COMPUTERNAME
+        TotalOemPackages                    = $packages.Count
+        ConnectedCount                      = $connectedCount
+        DisconnectedInstalledCount          = $disconnectedCount
+        NeverAssociatedCount                = $neverCount
+        PreservedCount                      = $preservedCount
+        DeletableCandidateCount             = $deletable.Count
+        ConnectedPublishedNames             = @($connectedPublishedNames)
+        DisconnectedInstalledPublishedNames = @($disconnectedPublishedNames)
+        PreservedPublishedNames             = @($preservedPublishedNames)
+        DeletablePublishedNames             = @($deletablePublishedNames)
+        DeletedCount                        = $deletedCount
+        ExportOrDeleteFailedCount           = $failedCount
+        ExportOrDeleteFailedReport          = $failedPath
+        BackupRoot                          = $backupRoot
+        Results                             = $results.ToArray()
+    }
+    $failedReport = [pscustomobject]@{
+        ScriptType                = 'IntuneMvpRemediation'
+        GeneratedAt               = ([DateTimeOffset]::Now.ToString('o'))
+        ComputerName              = [string]$env:COMPUTERNAME
+        ExportOrDeleteFailedCount = @($failedRows).Count
+        Failures                  = @($failedRows)
     }
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-    [System.IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json -Depth 5), $utf8NoBom)
+    [System.IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json -Depth 6), $utf8NoBom)
+    [System.IO.File]::WriteAllText($failedPath, ($failedReport | ConvertTo-Json -Depth 6), $utf8NoBom)
     if ($MvpRestrictProgramDataAccess -and $env:DSM_MVP_SKIP_STATE_ACL -ne '1') {
         Set-MvpRestrictedDirectoryAcl -LiteralPath $mvpBase
     }
+    foreach ($row in $results) { Write-MvpActionResult -Row $row }
     Write-Host ("DSM-MVP-REMEDIATE deleted={0} failed={1} file={2}" -f $deletedCount, $failedCount, $summaryPath)
+    Write-Host ("DSM-MVP-REMEDIATE ExportOrDeleteFailed={0} file={1}" -f @($failedRows).Count, $failedPath)
+    Write-MvpNameList -Label 'DSM-MVP-REMEDIATE Connected' -Names $connectedPublishedNames
+    Write-MvpNameList -Label 'DSM-MVP-REMEDIATE DisconnectedInstalled' -Names $disconnectedPublishedNames
+    Write-MvpNameList -Label 'DSM-MVP-REMEDIATE Preserved' -Names $preservedPublishedNames
+    Write-MvpNameList -Label 'DSM-MVP-REMEDIATE DeletablePublishedNames' -Names $deletablePublishedNames
     if ($failedCount -gt 0) { exit 2 }
     exit 0
 }

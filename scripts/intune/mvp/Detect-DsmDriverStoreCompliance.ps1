@@ -10,6 +10,8 @@
   It inventories staged oem*.inf packages, classifies device association, applies
   the preserve rules in #section Config, and exits 1 when deletable
   NeverAssociated packages reach the threshold. It does not delete drivers.
+  The report file is driver-store-report_<stamp>.json. The host log lists
+  Connected, DisconnectedInstalled, Preserved, and Deletable oem INF names.
   Blocklist, signature, and DiskId checks stay in the full module.
 
   Test seams (unset on Intune devices): DSM_MVP_STUB_PNPUTIL=1 reads CSV
@@ -93,6 +95,30 @@ function Get-MvpField {
         }
     }
     return ''
+}
+
+function ConvertTo-MvpSortedNames {
+    param($Names)
+    $items = New-Object System.Collections.Generic.List[string]
+    foreach ($name in @($Names)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$name)) {
+            [void]$items.Add([string]$name)
+        }
+    }
+    if ($items.Count -eq 0) { return }
+    $items.ToArray() | Sort-Object
+}
+
+function Write-MvpNameList {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Label,
+        $Names
+    )
+    $sorted = @(ConvertTo-MvpSortedNames -Names $Names)
+    $text = '(none)'
+    if ($sorted.Count -gt 0) { $text = ($sorted -join ',') }
+    Write-Host ("{0}={1}" -f $Label, $text)
 }
 
 function Get-MvpPatternList {
@@ -533,15 +559,28 @@ try {
     }
 
     $deletable = New-Object System.Collections.Generic.List[object]
+    $connectedNames = New-Object System.Collections.Generic.List[string]
+    $disconnectedNames = New-Object System.Collections.Generic.List[string]
+    $preservedNames = New-Object System.Collections.Generic.List[string]
     $connectedCount = 0
     $disconnectedCount = 0
     $neverCount = 0
     $preservedCount = 0
     foreach ($pkg in $packages) {
-        if ($pkg.DeviceAssociation -eq 'Connected') { $connectedCount++ }
-        elseif ($pkg.DeviceAssociation -eq 'DisconnectedInstalled') { $disconnectedCount++ }
+        $publishedName = [string]$pkg.PublishedName
+        if ($pkg.DeviceAssociation -eq 'Connected') {
+            $connectedCount++
+            [void]$connectedNames.Add($publishedName)
+        }
+        elseif ($pkg.DeviceAssociation -eq 'DisconnectedInstalled') {
+            $disconnectedCount++
+            [void]$disconnectedNames.Add($publishedName)
+        }
         elseif ($pkg.DeviceAssociation -eq 'NeverAssociated') { $neverCount++ }
-        if ($pkg.Preserved) { $preservedCount++ }
+        if ($pkg.Preserved) {
+            $preservedCount++
+            [void]$preservedNames.Add($publishedName)
+        }
         if ($null -ne $allow -and -not $allow.Contains([string]$pkg.PublishedName)) { continue }
         if (-not (Test-MvpPackageMatches -Package $pkg -Filter $scopeFilter)) { continue }
         if ($pkg.DeviceAssociation -ne 'NeverAssociated') { continue }
@@ -623,19 +662,26 @@ try {
         New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
     }
     $stamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
-    $reportPath = Join-Path $stateRoot ("driver-store-mvp_{0}.json" -f $stamp)
+    $reportPath = Join-Path $stateRoot ("driver-store-report_{0}.json" -f $stamp)
     $deletableNames = @($deletable | ForEach-Object { [string]$_.PublishedName })
+    $connectedPublishedNames = @(ConvertTo-MvpSortedNames -Names $connectedNames)
+    $disconnectedPublishedNames = @(ConvertTo-MvpSortedNames -Names $disconnectedNames)
+    $preservedPublishedNames = @(ConvertTo-MvpSortedNames -Names $preservedNames)
+    $deletablePublishedNames = @(ConvertTo-MvpSortedNames -Names $deletableNames)
     $report = [pscustomobject]@{
-        ScriptType               = 'IntuneMvpDetection'
-        GeneratedAt              = ([DateTimeOffset]::Now.ToString('o'))
-        ComputerName             = [string]$env:COMPUTERNAME
-        TotalOemPackages         = $packages.Count
-        ConnectedCount           = $connectedCount
-        DisconnectedInstalledCount = $disconnectedCount
-        NeverAssociatedCount     = $neverCount
-        PreservedCount           = $preservedCount
-        DeletableCandidateCount  = $deletable.Count
-        DeletablePublishedNames  = @($deletableNames)
+        ScriptType                         = 'IntuneMvpDetection'
+        GeneratedAt                        = ([DateTimeOffset]::Now.ToString('o'))
+        ComputerName                       = [string]$env:COMPUTERNAME
+        TotalOemPackages                   = $packages.Count
+        ConnectedCount                     = $connectedCount
+        DisconnectedInstalledCount         = $disconnectedCount
+        NeverAssociatedCount               = $neverCount
+        PreservedCount                     = $preservedCount
+        DeletableCandidateCount            = $deletable.Count
+        ConnectedPublishedNames            = @($connectedPublishedNames)
+        DisconnectedInstalledPublishedNames = @($disconnectedPublishedNames)
+        PreservedPublishedNames            = @($preservedPublishedNames)
+        DeletablePublishedNames            = @($deletablePublishedNames)
     }
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
     [System.IO.File]::WriteAllText($reportPath, ($report | ConvertTo-Json -Depth 4), $utf8NoBom)
@@ -647,6 +693,10 @@ try {
         Set-MvpRestrictedDirectoryAcl -LiteralPath $protectedRoot
     }
     Write-Host ("DSM-MVP-DETECT deletable={0} file={1}" -f $deletable.Count, $reportPath)
+    Write-MvpNameList -Label 'DSM-MVP-DETECT Connected' -Names $connectedPublishedNames
+    Write-MvpNameList -Label 'DSM-MVP-DETECT DisconnectedInstalled' -Names $disconnectedPublishedNames
+    Write-MvpNameList -Label 'DSM-MVP-DETECT Preserved' -Names $preservedPublishedNames
+    Write-MvpNameList -Label 'DSM-MVP-DETECT DeletablePublishedNames' -Names $deletablePublishedNames
 
     #section Compliance gate
     if ($MvpDetectOrphanCandidates -and $deletable.Count -ge $MvpOrphanThreshold) { exit 1 }

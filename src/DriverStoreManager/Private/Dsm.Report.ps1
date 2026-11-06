@@ -294,6 +294,110 @@ function Get-DsmDriverFamilyVersionLadders {
     return @($ladders)
 }
 
+function Get-DsmOemPublishedNames {
+    <#
+    .SYNOPSIS
+        Sorted oem*.inf published names from a package set. Inbox drivers are omitted.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyCollection()]
+        [psobject[]] $Packages
+    )
+
+    $names = New-Object System.Collections.Generic.List[string]
+    $pkgs = @(
+        if ($null -eq $Packages) { @() }
+        else { $Packages | Where-Object { $null -ne $_ } }
+    )
+    foreach ($pkg in $pkgs) {
+        $published = [string](Get-DsmObjectPropertyValue -Object $pkg -Name 'PublishedName')
+        if ($published -match '^oem\d+\.inf$') {
+            [void]$names.Add($published)
+        }
+    }
+    if ($names.Count -eq 0) { return }
+    $names.ToArray() | Sort-Object
+}
+
+function Get-DsmOemAssociationNameLists {
+    <#
+    .SYNOPSIS
+        oem*.inf names for Connected, DisconnectedInstalled, Preserved, and deletable packages.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyCollection()]
+        [psobject[]] $Packages,
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyCollection()]
+        [psobject[]] $Deletable
+    )
+
+    $pkgs = @(
+        if ($null -eq $Packages) { @() }
+        else { $Packages | Where-Object { $null -ne $_ } }
+    )
+    $connected = @($pkgs | Where-Object {
+            $_.DeviceAssociation -eq 'Connected' -or (-not $_.DeviceAssociation -and $_.InUse)
+        })
+    $disconnected = @($pkgs | Where-Object {
+            $_.DeviceAssociation -eq 'DisconnectedInstalled' -or (
+                -not $_.DeviceAssociation -and -not $_.InUse -and $_.DeviceCount -gt 0)
+        })
+    $preserved = @($pkgs | Where-Object {
+            [bool](Get-DsmObjectPropertyValue -Object $_ -Name 'Preserved')
+        })
+    $deletablePkgs = @(
+        if ($null -eq $Deletable) { @() }
+        else { $Deletable | Where-Object { $null -ne $_ } }
+    )
+
+    return [pscustomobject]@{
+        ConnectedPublishedNames             = @(Get-DsmOemPublishedNames -Packages $connected)
+        DisconnectedInstalledPublishedNames = @(Get-DsmOemPublishedNames -Packages $disconnected)
+        PreservedPublishedNames             = @(Get-DsmOemPublishedNames -Packages $preserved)
+        DeletablePublishedNames             = @(Get-DsmOemPublishedNames -Packages $deletablePkgs)
+    }
+}
+
+function Write-DsmOemPublishedNameLog {
+    <#
+    .SYNOPSIS
+        Writes Connected, DisconnectedInstalled, Preserved, and deletable oem INF lists to the host.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $Prefix,
+
+        [Parameter(Mandatory)]
+        [psobject] $Summary
+    )
+
+    $labels = @(
+        @{ Label = 'Connected'; Property = 'ConnectedPublishedNames' }
+        @{ Label = 'DisconnectedInstalled'; Property = 'DisconnectedInstalledPublishedNames' }
+        @{ Label = 'Preserved'; Property = 'PreservedPublishedNames' }
+        @{ Label = 'DeletablePublishedNames'; Property = 'DeletablePublishedNames' }
+    )
+    foreach ($item in $labels) {
+        $raw = Get-DsmObjectPropertyValue -Object $Summary -Name $item.Property
+        $names = New-Object System.Collections.Generic.List[string]
+        foreach ($name in @($raw)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$name)) {
+                [void]$names.Add([string]$name)
+            }
+        }
+        $text = '(none)'
+        if ($names.Count -gt 0) { $text = ($names -join ',') }
+        Write-Host ("{0} {1}={2}" -f $Prefix, $item.Label, $text)
+    }
+}
+
 function Measure-DsmDriverStoreScope {
     <#
     .SYNOPSIS
@@ -342,6 +446,10 @@ function Measure-DsmDriverStoreScope {
             SignatureIssueCount                = 0
             OrphanCandidateCount               = 0
             DeletableCandidateCount            = 0
+            ConnectedPublishedNames            = @()
+            DisconnectedInstalledPublishedNames = @()
+            PreservedPublishedNames            = @()
+            DeletablePublishedNames            = @()
             EstimatedReclaimableBytes          = 0
             FilteredCount                      = 0
             FilterMatchRate                    = if ($FilterResult) { $FilterResult.FilterMatchRate } else { 1.0 }
@@ -430,6 +538,10 @@ function Measure-DsmDriverStoreScope {
         SignatureIssueCount                = $signatureOnly.Count
         OrphanCandidateCount               = $orphans.Count
         DeletableCandidateCount            = $deletable.Count
+        ConnectedPublishedNames            = @(Get-DsmOemPublishedNames -Packages $connected)
+        DisconnectedInstalledPublishedNames = @(Get-DsmOemPublishedNames -Packages $disconnected)
+        PreservedPublishedNames            = @(Get-DsmOemPublishedNames -Packages $preserved)
+        DeletablePublishedNames            = @(Get-DsmOemPublishedNames -Packages $deletable)
         EstimatedReclaimableBytes          = $reclaimable
         FilteredCount                      = $pkgs.Count
         FilterMatchRate                    = if ($FilterResult) { $FilterResult.FilterMatchRate } else { 1.0 }
@@ -605,7 +717,18 @@ function ConvertTo-DsmDriverStoreReportMarkdown {
         $lines.Add("## $scopeName summary") | Out-Null
         $lines.Add('') | Out-Null
         foreach ($prop in $scope.Summary.PSObject.Properties) {
-            $lines.Add("- **$($prop.Name)**: $($prop.Value)") | Out-Null
+            $rendered = $prop.Value
+            if ($prop.Name -like '*PublishedNames') {
+                $names = New-Object System.Collections.Generic.List[string]
+                foreach ($name in @($prop.Value)) {
+                    if (-not [string]::IsNullOrWhiteSpace([string]$name)) {
+                        [void]$names.Add([string]$name)
+                    }
+                }
+                if ($names.Count -eq 0) { $rendered = '(none)' }
+                else { $rendered = ($names -join ', ') }
+            }
+            $lines.Add("- **$($prop.Name)**: $rendered") | Out-Null
         }
         $lines.Add('') | Out-Null
 

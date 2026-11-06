@@ -38,9 +38,15 @@ per file):
 A relative `-Inline*File` path is resolved against the **PowerShell current
 location** (where you ran the builder). It is not resolved against
 `$PSScriptRoot` or the .NET process directory. `-PreserveRulesPath` and
-`-BlocklistPath` are different: those strings are copied into the generated
-scripts and interpreted later on the endpoint, so pass absolute on-endpoint
-paths.
+`-BlocklistPath` are on-endpoint paths: pass an absolute path such as
+`C:\ProgramData\DriverStoreManager\config\preserve-rules.json`. That string
+is copied into the generated scripts and read later on the endpoint.
+
+A relative `-PreserveRulesPath` or `-BlocklistPath` is not an on-endpoint
+path. When that file exists in the PowerShell current location, the build
+embeds it (same as `-Inline*File`) and warns. When it does not exist, the
+build stops. Do not pass `.\examples\preserve-rules.example.json` and expect
+the endpoint to open that path.
 
 Intune Detection and Remediation are **separate process launches**. Detection
 does **not** deliver config files for cleanup. Preserve rules belong in both
@@ -260,10 +266,10 @@ switches and settings file into that section when the MVP implements them:
 orphan threshold, whether orphan candidates fail detection, max deletes,
 elevation, `IncludePublishedName`, and the filters `Provider`, `DriverClass`,
 `PublishedName`, `OriginalName`, `HardwareId`, and `Association` (`Any` does
-not narrow the set). `-InlinePreserveRulesFile`, or `PreserveRulesPath` in
-the settings file when that file exists at build time, replaces the baked
-preserve JSON. `-PreserveRulesPath` alone is an on-endpoint path; a missing
-file exits `2`.
+not narrow the set). `-InlinePreserveRulesFile`, a relative `-PreserveRulesPath` that exists on
+the build machine, or `PreserveRulesPath` in the settings file when that
+file exists at build time, replaces the baked preserve JSON. An absolute
+`-PreserveRulesPath` is an on-endpoint path; a missing file exits `2`.
 
 Blocklist, signature, DiskId, DISM, device name, class GUID, driver version
 filters, cleanup preview, and report family grouping stay in the full bundles.

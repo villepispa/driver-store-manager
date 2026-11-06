@@ -67,12 +67,17 @@
   Baked `$DsmRemediationRequireElevation` (default `$true`).
 
 .PARAMETER BlocklistPath
-  On-endpoint supplemental blocklist path baked into Detection (path-only mode).
-  Mutually exclusive with -InlineBlocklistFile.
+  Absolute on-endpoint supplemental blocklist path baked into Detection
+  (path-only mode). A relative path that exists on this machine is embedded
+  instead, the same as -InlineBlocklistFile. A relative path that does not
+  exist stops the build. Mutually exclusive with -InlineBlocklistFile.
 
 .PARAMETER PreserveRulesPath
-  On-endpoint preserve-rules JSON path baked into Detection and Remediation
-  (path-only mode). Mutually exclusive with -InlinePreserveRulesFile.
+  Absolute on-endpoint preserve-rules JSON path baked into Detection and
+  Remediation (path-only mode). A relative path that exists on this machine
+  is embedded instead, the same as -InlinePreserveRulesFile. A relative path
+  that does not exist stops the build. Mutually exclusive with
+  -InlinePreserveRulesFile.
 
 .PARAMETER InlineBlocklistFile
   Local hash file whose content is inlined into Detection. At runtime the
@@ -354,6 +359,31 @@ function Resolve-DsmPowerShellLiteralPath {
     return [System.IO.Path]::GetFullPath((Join-Path $base $Path))
 }
 
+function Resolve-DsmRelativeBuildFile {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Path,
+
+        [Parameter(Mandatory)]
+        [string] $SwitchName,
+
+        [Parameter(Mandatory)]
+        [string] $InlineSwitchName
+    )
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return $null
+    }
+
+    $fullPath = Resolve-DsmPowerShellLiteralPath -Path $Path
+    if (-not (Test-Path -LiteralPath $fullPath)) {
+        throw ("-{0} '{1}' is a relative path and was not found on this machine. A relative path is not copied to the endpoint. Use -{2} to embed a local file, or pass an absolute path that already exists on the endpoint." -f $SwitchName, $Path, $InlineSwitchName)
+    }
+
+    Write-Warning ("-{0} '{1}' points at a file on this machine. Embedding that file. Pass an absolute on-endpoint path to keep path-only mode." -f $SwitchName, $Path)
+    return $fullPath
+}
+
 function Get-DsmInlineFileText {
     param(
         [string] $LiteralPath,
@@ -566,6 +596,24 @@ IncludeWindowsBuiltIn cannot be enabled for Intune. Inbox driver manifests stay 
 
     if (-not $PSBoundParameters.ContainsKey('ForceBlocklistUpdate') -and $fromFile.Contains('UpdateMicrosoftBlocklist')) {
         $ForceBlocklistUpdate = [bool]$fromFile['UpdateMicrosoftBlocklist']
+    }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($PreserveRulesPath)) {
+    $preserveLocal = Resolve-DsmRelativeBuildFile -Path $PreserveRulesPath `
+        -SwitchName 'PreserveRulesPath' -InlineSwitchName 'InlinePreserveRulesFile'
+    if ($preserveLocal) {
+        $InlinePreserveRulesFile = $preserveLocal
+        $PreserveRulesPath = $null
+    }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($BlocklistPath)) {
+    $blocklistLocal = Resolve-DsmRelativeBuildFile -Path $BlocklistPath `
+        -SwitchName 'BlocklistPath' -InlineSwitchName 'InlineBlocklistFile'
+    if ($blocklistLocal) {
+        $InlineBlocklistFile = $blocklistLocal
+        $BlocklistPath = $null
     }
 }
 

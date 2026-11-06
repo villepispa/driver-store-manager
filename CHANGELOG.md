@@ -7,7 +7,19 @@ versioning aligns with [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
-_Nothing queued — latest release: **0.15.0**._
+_Nothing queued — latest release: **0.15.1**._
+
+## [0.15.1] — 2026-11-06
+
+### Fixed
+
+- **DSM-051:** A relative `-PreserveRulesPath` or `-BlocklistPath` that exists
+  on the build machine is embedded in the Intune scripts, including the
+  enterprise MVP preserve JSON. An absolute path stays path-only. A relative
+  path that is not on the build machine stops the build instead of shipping
+  a script that looks for that path on the endpoint.
+- **`ModuleVersion`** — `DriverStoreManager.psd1` set to `0.15.1` for this
+  release.
 
 ## [0.15.0] — 2026-10-18
 

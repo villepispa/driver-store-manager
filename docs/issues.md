@@ -17,6 +17,21 @@ Product IDs use the `DSM-` prefix. Release notes live in [CHANGELOG.md](../CHANG
 
 None.
 
+## Resolved issues (2026-11-06 — 0.15.1 — DSM-051)
+
+| ID | Summary | Evidence |
+|----|---------|----------|
+| DSM-051 | A relative Intune preserve path was copied into the script instead of the file | `Build-DsmIntuneScripts.Tests.ps1` 20/20; MVP detection exit 0 |
+
+### DSM-051 — Relative Intune preserve path was copied instead of embedded
+
+- **Status:** Resolved
+- **Severity:** Medium
+- **Area:** Intune
+- **Impact:** `-PreserveRulesPath .\examples\preserve-rules.example.json` was stored as a path string. Detection then threw `Preserve rules file not found` because that relative path is not on the endpoint, and it is not next to `dist/intune/mvp` either.
+- **Remediation:** A relative `-PreserveRulesPath` or `-BlocklistPath` that exists on the build machine is embedded. An absolute path stays an on-endpoint path. A relative path that is not on the build machine stops the build.
+- **Evidence:** `tests/unit/Build-DsmIntuneScripts.Tests.ps1` 20/20. Example settings rebuild. MVP detection wrote `deletable=0` and exited 0 when the report folder was writable.
+
 ## Resolved issues (2026-10-18 — 0.15.0 — DSM-050)
 
 | ID | Summary | Evidence |
@@ -384,6 +399,7 @@ rebuilt `dist/intune/*.ps1`.
 ## Activity
 
 <!-- ISSUES-ACTIVITY+ -->
+- **2026-11-06 11:18:25** — Cut **0.15.1** (`DSM-051`): a relative Intune preserve or blocklist path that exists at build time is embedded in the generated scripts.
 - **2026-10-18 08:40:00** — Cut **0.15.0** (`DSM-050`): driver-store folders are cleaned up only when older than `DriverFolderMinAgeDays`.
 - **2026-10-16 19:20:37** — Resolved `DSM-050`: a driver-store folder is cleaned up only when it is older than `DriverFolderMinAgeDays` (Intune default 14; `0` keeps every age). `DSM-VALIDATE-OK` (Pester 122, lint 0/33, PS 5.1 smoke).
 - **2026-10-16 15:24:00** — Register heading for **0.14.1** (ACL tests; no new `DSM-` id). Changelog `0.14.0` cites **DSM-047**.

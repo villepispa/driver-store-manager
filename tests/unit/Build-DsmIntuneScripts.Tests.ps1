@@ -362,4 +362,109 @@ Describe 'Build-DsmIntuneScripts configuration' {
         $mvpRemediate.Contains('Site net') | Should-Be $true
         $mvpRemediate.Contains('Contoso') | Should-Be $false
     }
+
+    It 'Embeds a relative PreserveRulesPath that exists on the build machine' {
+        $caller = Join-Path $TestDrive 'relative-preserve'
+        New-Item -ItemType Directory -Path $caller -Force | Out-Null
+        $rules = '[{"Name":"Embedded printers","RuleType":"KeepMatching","Filter":{"DriverClass":["Printer"]}}]'
+        Set-Content -LiteralPath (Join-Path $caller 'preserve-rules.json') -Value $rules -Encoding utf8
+
+        $previousLocation = (Get-Location).ProviderPath
+        try {
+            Set-Location -LiteralPath $caller
+            $outDir = Invoke-DsmIntuneBuildUnderTest -BuildParameters @{
+                PreserveRulesPath = '.\preserve-rules.json'
+            }
+        }
+        finally {
+            Set-Location -LiteralPath $previousLocation
+        }
+
+        $detect = Get-Content -LiteralPath (Join-Path $outDir 'Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $remediate = Get-Content -LiteralPath (Join-Path $outDir 'Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+        $mvpDetect = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $mvpRemediate = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+
+        $detect.Contains('Embedded printers') | Should-Be $true
+        $detect.Contains("`$DsmPreserveRulesPath = `$null") | Should-Be $true
+        $detect.Contains('.\preserve-rules.json') | Should-Be $false
+        $remediate.Contains('Embedded printers') | Should-Be $true
+        $remediate.Contains("`$DsmPreserveRulesPath = `$null") | Should-Be $true
+        $mvpDetect.Contains('Embedded printers') | Should-Be $true
+        $mvpDetect.Contains("`$MvpPreserveRulesPath = ''") | Should-Be $true
+        $mvpDetect.Contains('.\preserve-rules.json') | Should-Be $false
+        $mvpRemediate.Contains('Embedded printers') | Should-Be $true
+        $mvpRemediate.Contains('.\preserve-rules.json') | Should-Be $false
+    }
+
+    It 'Rejects a relative PreserveRulesPath that is not on the build machine' {
+        {
+            Invoke-DsmIntuneBuildUnderTest -BuildParameters @{
+                PreserveRulesPath = '.\dsm-missing-preserve-rules.json'
+            }
+        } | Should -Throw '*relative path*'
+    }
+
+    It 'Embeds a relative BlocklistPath into Detection only' {
+        $caller = Join-Path $TestDrive 'relative-blocklist'
+        New-Item -ItemType Directory -Path $caller -Force | Out-Null
+        $hash = 'F' * 64
+        Set-Content -LiteralPath (Join-Path $caller 'blocklist-hashes.txt') -Value $hash -Encoding utf8
+
+        $previousLocation = (Get-Location).ProviderPath
+        try {
+            Set-Location -LiteralPath $caller
+            $outDir = Invoke-DsmIntuneBuildUnderTest -BuildParameters @{
+                BlocklistPath = '.\blocklist-hashes.txt'
+            }
+        }
+        finally {
+            Set-Location -LiteralPath $previousLocation
+        }
+
+        $detect = Get-Content -LiteralPath (Join-Path $outDir 'Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $remediate = Get-Content -LiteralPath (Join-Path $outDir 'Remediate-DsmDriverStore.ps1') -Raw -Encoding UTF8
+        $detect.Contains($hash) | Should-Be $true
+        $detect.Contains("`$DsmBlocklistPath = `$null") | Should-Be $true
+        $detect.Contains('.\blocklist-hashes.txt') | Should-Be $false
+        $remediate.Contains($hash) | Should-Be $false
+    }
+
+    It 'Settings file plus a relative PreserveRulesPath embeds that file and keeps profile filters' {
+        $caller = Join-Path $TestDrive 'settings-plus-relative'
+        New-Item -ItemType Directory -Path $caller -Force | Out-Null
+        $sibling = '[{"Name":"Settings sibling","RuleType":"KeepMatching","Filter":{"DriverClass":["Printer"]}}]'
+        $explicit = '[{"Name":"Bound explicit","RuleType":"KeepMatching","Filter":{"DriverClass":["Printer"]}}]'
+        Set-Content -LiteralPath (Join-Path $caller 'other-rules.json') -Value $sibling -Encoding utf8
+        Set-Content -LiteralPath (Join-Path $caller 'explicit-rules.json') -Value $explicit -Encoding utf8
+        @'
+{
+  "DriverClass": ["Printer"],
+  "PreserveRulesPath": "other-rules.json"
+}
+'@ | Set-Content -LiteralPath (Join-Path $caller 'dsm.settings.json') -Encoding utf8
+
+        $previousLocation = (Get-Location).ProviderPath
+        try {
+            Set-Location -LiteralPath $caller
+            $outDir = Invoke-DsmIntuneBuildUnderTest -BuildParameters @{
+                SettingsFile      = (Join-Path $caller 'dsm.settings.json')
+                PreserveRulesPath = '.\explicit-rules.json'
+            }
+        }
+        finally {
+            Set-Location -LiteralPath $previousLocation
+        }
+
+        $detect = Get-Content -LiteralPath (Join-Path $outDir 'Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $mvpDetect = Get-Content -LiteralPath (Join-Path $outDir 'mvp\Detect-DsmDriverStoreCompliance.ps1') -Raw -Encoding UTF8
+        $detect.Contains("DriverClass = @('Printer')") | Should-Be $true
+        $detect.Contains('Bound explicit') | Should-Be $true
+        $detect.Contains('Settings sibling') | Should-Be $false
+        $detect.Contains("`$DsmPreserveRulesPath = `$null") | Should-Be $true
+        $mvpDetect.Contains("`$MvpFilterDriverClass = @('Printer')") | Should-Be $true
+        $mvpDetect.Contains('Bound explicit') | Should-Be $true
+        $mvpDetect.Contains("`$MvpPreserveRulesPath = ''") | Should-Be $true
+        $mvpDetect.Contains('.\explicit-rules.json') | Should-Be $false
+    }
 }

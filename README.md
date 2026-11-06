@@ -139,7 +139,9 @@ Edit module source under `src/`; generate upload scripts — do **not** hand-edi
 ```
 
 Relative `-Inline*File` and `-SettingsFile` paths are read from the PowerShell
-current location (the folder you ran the builder from). `-SettingsFile` bakes
+current location (the folder you ran the builder from). A relative
+`-PreserveRulesPath` or `-BlocklistPath` that exists there is embedded too;
+an absolute path stays an on-endpoint path. `-SettingsFile` bakes
 the same run-profile keys as interactive `-SettingsPath`, except the exclusions
 in [intune-deployment.md](docs/intune-deployment.md) (`IncludeWindowsBuiltIn`,
 deletion arming, and output or backup paths). The generated scripts do not
